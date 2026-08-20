@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 import re
+import secrets
 import sqlite3
 
 from flask import Blueprint, flash, g, jsonify, redirect, render_template, request, session, url_for
@@ -73,10 +74,9 @@ def login():
         if user is None or not check_password_hash(user["password_hash"], password):
             flash("اسم المستخدم أو كلمة المرور غير صحيحة.", "error")
         else:
-            csrf_token = session.get("csrf_token")
             session.clear()
             session["user_id"] = user["id"]
-            session["csrf_token"] = csrf_token
+            session["csrf_token"] = secrets.token_urlsafe(32)
             return redirect(url_for("auth.dashboard"))
     return render_template("login.html")
 

@@ -7,6 +7,14 @@ def test_home_and_health(client):
     assert client.get("/health").get_json() == {"status": "ok"}
 
 
+def test_dependency_health_does_not_expose_connection_details(client):
+    response = client.get("/health/dependencies")
+    assert response.status_code in {200, 503}
+    payload = response.get_json()
+    assert set(payload) == {"application", "database", "redis", "ffmpeg", "ffprobe"}
+    assert "redis://" not in response.text
+
+
 def test_dashboard_redirects_guests(client):
     response = client.get("/dashboard")
     assert response.status_code == 302

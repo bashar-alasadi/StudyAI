@@ -158,3 +158,22 @@ def test_overlap_is_deduplicated_and_arabic_is_preserved():
         {"segment_index": 1, "status": "completed", "transcript": "باء جيم دال هاء واو"},
     ]
     assert assemble_complete_transcript(rows) == "ألف باء جيم دال هاء واو"
+
+
+def test_non_retryable_segment_failure_marks_job_failed_and_keeps_media(app, client):
+    job_id = make_queued_job(app, client)
+
+    class RejectingAI(FakePipelineAI):
+        def transcribe_path(self, _path):
+            raise AIServiceError(
+                "rejected", "ملف غير مقبول", retryable=False, code="provider_rejected"
+            )
+
+    app.config.update(MEDIA_SERVICE_FACTORY=FakeMedia, AI_SERVICE_FACTORY=RejectingAI)
+    with app.app_context():
+        storage = upload_dir(get_job(job_id)["upload_id"])
+        process_pipeline(job_id, sleeper=lambda _seconds: None)
+        job = get_job(job_id)
+        assert job["status"] == "failed"
+        assert job["error_code"] == "provider_rejected"
+        assert storage.exists()

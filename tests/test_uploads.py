@@ -3,6 +3,11 @@ from __future__ import annotations
 from conftest import csrf, register_and_login
 
 from studyai.db import get_db
+from studyai.services.uploads import (
+    cleanup_expired_job_media,
+    cleanup_stale_uploads,
+    upload_dir,
+)
 
 
 def initialize(client, filename="lecture.mp3", total_size=10, chunk_size=4):
@@ -102,3 +107,54 @@ def test_upload_mutations_require_csrf(client):
         "/api/uploads", json={"filename": "lecture.mp3", "total_size": 10, "chunk_size": 4}
     )
     assert response.status_code == 400
+
+
+def test_stale_incomplete_upload_cleanup(app, client):
+    register_and_login(client)
+    upload_id = initialize(client).get_json()["upload_id"]
+    with app.app_context():
+        database = get_db()
+        database.execute(
+            "UPDATE upload_sessions SET updated_at = datetime('now', '-48 hours') WHERE id = ?",
+            (upload_id,),
+        )
+        database.commit()
+        assert cleanup_stale_uploads(24) == 1
+        assert not upload_dir(upload_id).exists()
+        assert database.execute(
+            "SELECT 1 FROM upload_sessions WHERE id = ?", (upload_id,)
+        ).fetchone() is None
+
+
+def test_expired_failed_job_media_cleanup_preserves_records(app):
+    from studyai.jobs import create_job, fail_job
+    from studyai.services.uploads import create_upload
+
+    with app.app_context():
+        database = get_db()
+        database.execute(
+            """INSERT INTO users (name, username, email, password_hash)
+               VALUES ('Test', 'cleanup-user', 'cleanup@example.com', 'unused')"""
+        )
+        database.commit()
+        user_id = database.execute(
+            "SELECT id FROM users WHERE username = 'cleanup-user'"
+        ).fetchone()["id"]
+        upload = create_upload(user_id, "lecture.mp3", 4, 4)
+        directory = upload_dir(upload["id"])
+        job_id = create_job(user_id, "lecture.mp3", upload_id=upload["id"])
+        fail_job(job_id, "provider_error", "تعذر إكمال المعالجة")
+        database.execute(
+            "UPDATE processing_jobs SET completed_at = datetime('now', '-8 days') WHERE id = ?",
+            (job_id,),
+        )
+        database.commit()
+
+        assert cleanup_expired_job_media(168) == 1
+        assert not directory.exists()
+        assert database.execute(
+            "SELECT id FROM processing_jobs WHERE id = ?", (job_id,)
+        ).fetchone()
+        assert database.execute(
+            "SELECT assembled_path FROM upload_sessions WHERE id = ?", (upload["id"],)
+        ).fetchone()["assembled_path"] is None

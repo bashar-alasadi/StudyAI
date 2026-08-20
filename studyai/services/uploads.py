@@ -169,6 +169,32 @@ def cleanup_stale_uploads(max_age_hours: int = 24) -> int:
     return len(stale)
 
 
+def cleanup_expired_job_media(max_age_hours: int = 168) -> int:
+    """Remove retained media for terminal jobs without deleting their audit records."""
+    database = get_db()
+    expired = database.execute(
+        """SELECT DISTINCT u.id
+           FROM upload_sessions AS u
+           JOIN processing_jobs AS j ON j.upload_id = u.id
+           WHERE j.status IN ('failed', 'cancelled')
+             AND COALESCE(j.completed_at, j.updated_at) < datetime('now', ?)""",
+        (f"-{max_age_hours} hours",),
+    ).fetchall()
+    removed = 0
+    for row in expired:
+        directory = upload_dir(row["id"])
+        if directory.exists():
+            shutil.rmtree(directory, ignore_errors=False)
+            removed += 1
+        database.execute(
+            """UPDATE upload_sessions SET assembled_path = NULL, updated_at = CURRENT_TIMESTAMP
+               WHERE id = ?""",
+            (row["id"],),
+        )
+    database.commit()
+    return removed
+
+
 def upload_dir(upload_id: str) -> Path:
     if len(upload_id) != 32 or not all(character in "0123456789abcdef" for character in upload_id):
         raise UploadError("معرّف الرفع غير صالح.")

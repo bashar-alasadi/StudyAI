@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+import shutil
 from pathlib import Path
 
+import click
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 from werkzeug.exceptions import HTTPException
@@ -43,7 +45,50 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     @app.get("/health")
     def health():
+        try:
+            db.get_db().execute("SELECT 1").fetchone()
+        except Exception:
+            return jsonify(status="unhealthy"), 503
         return jsonify(status="ok")
+
+    @app.get("/health/dependencies")
+    def dependency_health():
+        redis_ok = False
+        try:
+            from redis import Redis
+
+            redis_ok = bool(
+                Redis.from_url(
+                    app.config["REDIS_URL"], socket_connect_timeout=1, socket_timeout=1
+                ).ping()
+            )
+        except Exception:
+            pass
+        ffmpeg_ok = _command_available(app.config["FFMPEG_PATH"])
+        ffprobe_ok = _command_available(app.config["FFPROBE_PATH"])
+        payload = {
+            "application": True,
+            "database": True,
+            "redis": redis_ok,
+            "ffmpeg": ffmpeg_ok,
+            "ffprobe": ffprobe_ok,
+        }
+        return jsonify(payload), 200 if all(payload.values()) else 503
+
+    @app.cli.command("cleanup-storage")
+    @click.option("--stale-hours", type=int, default=None)
+    @click.option("--failed-hours", type=int, default=None)
+    def cleanup_storage(stale_hours, failed_hours):
+        from .services.uploads import cleanup_expired_job_media, cleanup_stale_uploads
+
+        hours = stale_hours or app.config["STALE_UPLOAD_HOURS"]
+        retention = failed_hours or app.config["FAILED_MEDIA_RETENTION_HOURS"]
+        stale_removed = cleanup_stale_uploads(hours)
+        media_removed = cleanup_expired_job_media(retention)
+        click.echo(
+            f"Removed {stale_removed} stale upload session(s) and "
+            f"{media_removed} expired failed-job media directorie(s)."
+        )
 
     @app.after_request
     def add_security_headers(response):
@@ -71,6 +116,11 @@ def create_app(test_config: dict | None = None) -> Flask:
         return render_template("error.html", status=status, message=message), status
 
     return app
+
+
+def _command_available(command: str) -> bool:
+    path = Path(command)
+    return path.is_file() if path.is_absolute() else shutil.which(command) is not None
 
 
 def _validate_config(app: Flask) -> None:

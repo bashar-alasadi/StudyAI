@@ -28,6 +28,10 @@ def build_config(environ: Mapping[str, str] | None = None) -> dict[str, object]:
         "UPLOAD_CHUNK_SIZE_BYTES": _positive_int(env, "UPLOAD_CHUNK_MB", 8) * 1024**2,
         "MAX_CONTENT_LENGTH": _positive_int(env, "UPLOAD_CHUNK_MB", 8) * 1024**2 + 1024,
         "MIN_FREE_DISK_MB": _positive_int(env, "MIN_FREE_DISK_MB", 512),
+        "STALE_UPLOAD_HOURS": _positive_int(env, "STALE_UPLOAD_HOURS", 24),
+        "FAILED_MEDIA_RETENTION_HOURS": _positive_int(
+            env, "FAILED_MEDIA_RETENTION_HOURS", 168
+        ),
         "FFMPEG_PATH": env.get("FFMPEG_PATH", "ffmpeg"),
         "FFPROBE_PATH": env.get("FFPROBE_PATH", "ffprobe"),
         "TRANSCRIPTION_SEGMENT_MINUTES": _positive_int(

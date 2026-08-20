@@ -189,4 +189,9 @@ def _ai_service():
 def _cleanup_success(job_id: str) -> None:
     job = get_job(job_id)
     if job and job["upload_id"]:
-        shutil.rmtree(upload_dir(job["upload_id"]), ignore_errors=False)
+        try:
+            shutil.rmtree(upload_dir(job["upload_id"]), ignore_errors=False)
+        except OSError as error:
+            logger.warning(
+                "lecture_cleanup_failed job_id=%s category=%s", job_id, type(error).__name__
+            )
