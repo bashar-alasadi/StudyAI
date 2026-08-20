@@ -1,0 +1,3 @@
+{% extends "base.html" %}
+{% block title %}تعذر إكمال الطلب — StudyAI{% endblock %}
+{% block content %}<section class="empty-state"><span class="eyebrow">خطأ {{ status }}</span><h1>تعذر إكمال الطلب</h1><p>{{ message }}</p><a class="button" href="{{ url_for('index') }}">العودة للرئيسية</a></section>{% endblock %}

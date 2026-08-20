@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ session.csrf_token }}">
+  <title>{% block title %}StudyAI{% endblock %}</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="{{ url_for('index') }}" aria-label="StudyAI الرئيسية">
+      <span class="brand-mark">س</span><span>StudyAI</span>
+    </a>
+    <nav aria-label="التنقل الرئيسي">
+      <a href="{{ url_for('index') }}#features">المزايا</a>
+      {% if g.user %}
+        <a href="{{ url_for('auth.dashboard') }}">لوحة الدراسة</a>
+        <form action="{{ url_for('auth.logout') }}" method="post" class="inline-form">
+          <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+          <button class="nav-button" type="submit">تسجيل الخروج</button>
+        </form>
+      {% else %}
+        <a href="{{ url_for('auth.login') }}">تسجيل الدخول</a>
+        <a class="button button-small" href="{{ url_for('auth.register') }}">أنشئ حسابًا</a>
+      {% endif %}
+    </nav>
+  </header>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}<div class="flash-stack" aria-live="polite">
+      {% for category, message in messages %}<div class="flash flash-{{ category }}">{{ message }}</div>{% endfor %}
+    </div>{% endif %}
+  {% endwith %}
+
+  <main>{% block content %}{% endblock %}</main>
+  <footer><span>StudyAI</span><span>مساعد دراسي يحترم وقتك وخصوصيتك.</span></footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

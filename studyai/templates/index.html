@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}StudyAI — حوّل محاضرتك إلى معرفة{% endblock %}
+{% block content %}
+<section class="hero">
+  <div class="hero-copy">
+    <span class="eyebrow">مذاكرة أذكى، لا أطول</span>
+    <h1>من تسجيل طويل إلى مادة جاهزة للمراجعة.</h1>
+    <p>ارفع محاضرتك، احصل على تفريغ واضح، ثم حوّل النص إلى ملخص وأسئلة تساعدك على تثبيت المعلومات.</p>
+    <div class="hero-actions">
+      <a class="button" href="{{ url_for('auth.dashboard') if g.user else url_for('auth.register') }}">ابدأ الآن</a>
+      <a class="text-link" href="#features">اكتشف كيف يعمل</a>
+    </div>
+    <div class="trust-row"><span>✓ ملفات صوتية شائعة</span><span>✓ واجهة عربية</span><span>✓ حذف الملف المؤقت</span></div>
+  </div>
+  <div class="hero-visual" aria-label="مراحل تحويل المحاضرة">
+    <div class="visual-card active"><span>01</span><strong>المحاضرة</strong><small>lecture-07.m4a</small></div>
+    <div class="connector"></div>
+    <div class="visual-card"><span>02</span><strong>نص منظم</strong><small>فقرات قابلة للنسخ</small></div>
+    <div class="connector"></div>
+    <div class="visual-card"><span>03</span><strong>مراجعة مركزة</strong><small>ملخص + أسئلة</small></div>
+  </div>
+</section>
+<section id="features" class="section">
+  <div class="section-heading"><span class="eyebrow">مسار واحد متكامل</span><h2>كل ما تحتاجه بعد انتهاء المحاضرة</h2></div>
+  <div class="feature-grid">
+    <article><span class="icon">◉</span><h3>تفريغ دقيق</h3><p>تحويل التسجيل إلى نص عربي واضح مع الحفاظ على ترتيب المحتوى.</p></article>
+    <article><span class="icon">≡</span><h3>ملخص منظم</h3><p>استخلاص النقاط والمفاهيم المهمة في بنية سهلة للمراجعة.</p></article>
+    <article><span class="icon">?</span><h3>أسئلة للمذاكرة</h3><p>إنشاء أسئلة متنوعة وإجاباتها اعتمادًا على نص محاضرتك فقط.</p></article>
+  </div>
+</section>
+{% endblock %}

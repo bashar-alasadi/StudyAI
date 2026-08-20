@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}إنشاء حساب — StudyAI{% endblock %}
+{% block content %}
+<section class="auth-shell">
+  <form class="auth-card" method="post">
+    <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+    <span class="eyebrow">ابدأ رحلتك</span><h1>إنشاء حساب</h1>
+    <label>الاسم الكامل<input name="name" autocomplete="name" required maxlength="80" value="{{ request.form.name }}"></label>
+    <label>اسم المستخدم<input name="username" autocomplete="username" required minlength="3" maxlength="30" value="{{ request.form.username }}"></label>
+    <label>البريد الإلكتروني<input name="email" type="email" autocomplete="email" required maxlength="254" value="{{ request.form.email }}"></label>
+    <label>كلمة المرور<input name="password" type="password" autocomplete="new-password" required minlength="8" maxlength="128"><small>ثمانية أحرف على الأقل.</small></label>
+    <button class="button" type="submit">إنشاء الحساب</button>
+    <p>لديك حساب؟ <a href="{{ url_for('auth.login') }}">سجّل الدخول</a></p>
+  </form>
+</section>
+{% endblock %}

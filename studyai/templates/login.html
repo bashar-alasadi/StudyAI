@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}تسجيل الدخول — StudyAI{% endblock %}
+{% block content %}
+<section class="auth-shell">
+  <form class="auth-card" method="post">
+    <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+    <span class="eyebrow">مرحبًا بعودتك</span><h1>تسجيل الدخول</h1>
+    <label>اسم المستخدم<input name="username" autocomplete="username" required maxlength="30" value="{{ request.form.username }}"></label>
+    <label>كلمة المرور<input name="password" type="password" autocomplete="current-password" required maxlength="128"></label>
+    <button class="button" type="submit">دخول إلى لوحة الدراسة</button>
+    <p>ليس لديك حساب؟ <a href="{{ url_for('auth.register') }}">أنشئ حسابًا</a></p>
+  </form>
+</section>
+{% endblock %}
