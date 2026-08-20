@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+.test-tmp/
 .coverage
 htmlcov/
 instance/

@@ -12,14 +12,14 @@ from werkzeug.exceptions import HTTPException
 from . import db
 from .api import api_bp
 from .auth import auth_bp, load_logged_in_user
-from .config import Config
+from .config import DEVELOPMENT_SECRET, build_config
 from .csrf import ensure_csrf_token
 
 
 def create_app(test_config: dict | None = None) -> Flask:
-    load_dotenv()
+    load_dotenv(dotenv_path=Path.cwd() / ".env", override=False)
     app = Flask(__name__, instance_relative_config=True)
-    app.config.from_object(Config)
+    app.config.from_mapping(build_config())
     if test_config:
         app.config.update(test_config)
 
@@ -74,7 +74,7 @@ def _validate_config(app: Flask) -> None:
         return
     secret = app.config.get("SECRET_KEY", "")
     if app.config["ENVIRONMENT"] == "production" and (
-        not secret or secret == Config.DEVELOPMENT_SECRET
+        not secret or secret == DEVELOPMENT_SECRET
     ):
         raise RuntimeError("SECRET_KEY must be set to a strong value in production")
 
