@@ -1,0 +1,19 @@
+def test_home_and_health(client):
+    home = client.get("/")
+    assert home.status_code == 200
+    assert home.headers["X-Content-Type-Options"] == "nosniff"
+    assert home.headers["X-Frame-Options"] == "DENY"
+    assert "default-src 'self'" in home.headers["Content-Security-Policy"]
+    assert client.get("/health").get_json() == {"status": "ok"}
+
+
+def test_dashboard_redirects_guests(client):
+    response = client.get("/dashboard")
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/login")
+
+
+def test_unknown_page_has_friendly_error(client):
+    response = client.get("/does-not-exist")
+    assert response.status_code == 404
+    assert "تعذر إكمال الطلب" in response.text
