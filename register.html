@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <title>إنشاء حساب - StudyAI</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <div class="login-box">
+
+        <h1>إنشاء حساب</h1>
+        <p>أنشئ حسابك في StudyAI</p>
+
+        <input id="name" type="text" placeholder="الاسم الكامل">
+
+        <input id="newUsername" type="text" placeholder="اسم المستخدم">
+
+        <input id="email" type="email" placeholder="البريد الإلكتروني">
+
+        <input id="newPassword" type="password" placeholder="كلمة المرور">
+
+        <input id="confirmPassword" type="password" placeholder="تأكيد كلمة المرور">
+
+       <button onclick="register()">إنشاء الحساب</button>
+
+        <p>
+            لديك حساب بالفعل؟
+            <a href="login.html">تسجيل الدخول</a>
+        </p>
+
+    </div>
+<script>
+function register() {
+    let username = document.getElementById("newUsername").value;
+    let password = document.getElementById("newPassword").value;
+    let confirmPassword = document.getElementById("confirmPassword").value;
+
+    if (username === "" || password === "") {
+        alert("يرجى إدخال اسم المستخدم وكلمة المرور");
+        return;
+    }
+
+    if (password !== confirmPassword) {
+        alert("كلمتا المرور غير متطابقتين");
+        return;
+    }
+
+    localStorage.setItem("username", username);
+    localStorage.setItem("password", password);
+
+    alert("تم إنشاء الحساب بنجاح");
+
+    window.location.href = "login.html";
+}
+</script>
+</body>
+</html>

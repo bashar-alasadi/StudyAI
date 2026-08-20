@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة الطالب - StudyAI</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<div class="dashboard">
+
+    <h1>مرحباً بك في StudyAI 🎓</h1>
+    <p>مساعدك الذكي للدراسة والمحاضرات</p>
+
+    <div class="services">
+
+        <!-- رفع المحاضرة -->
+        <div class="service-card">
+
+            <h2>🎙️ رفع محاضرة</h2>
+
+            <p>
+                ارفع المحاضرة الصوتية لتحويلها إلى نص.
+            </p>
+
+            <input
+                id="audioFile"
+                type="file"
+                accept="audio/*"
+            >
+
+            <br><br>
+
+            <button
+                id="uploadButton"
+                onclick="uploadLecture()"
+            >
+                رفع المحاضرة
+            </button>
+
+            <p
+                id="uploadStatus"
+                style="margin-top: 15px;"
+            ></p>
+
+        </div>
+
+
+        <!-- تلخيص المحاضرة -->
+        <div class="service-card">
+
+            <h2>📝 تلخيص المحاضرة</h2>
+
+            <p>
+                احصل على ملخص مرتب لأهم النقاط.
+            </p>
+
+            <button onclick="summarizeLecture()">
+                تلخيص
+            </button>
+
+        </div>
+
+
+        <!-- إنشاء الأسئلة -->
+        <div class="service-card">
+
+            <h2>❓ إنشاء أسئلة</h2>
+
+            <p>
+                إنشاء أسئلة للمراجعة من المحاضرة.
+            </p>
+
+            <button onclick="generateQuestions()">
+                إنشاء أسئلة
+            </button>
+
+        </div>
+
+    </div>
+
+
+    <!-- منطقة عرض نص المحاضرة -->
+
+    <div
+        id="transcriptionSection"
+        style="
+            display:none;
+            margin-top:40px;
+            padding:25px;
+            background:white;
+            border-radius:15px;
+        "
+    >
+
+        <h2>📄 نص المحاضرة</h2>
+
+        <textarea
+            id="lectureText"
+            readonly
+            style="
+                width:95%;
+                min-height:300px;
+                padding:15px;
+                font-size:17px;
+                line-height:1.8;
+                direction:rtl;
+                border-radius:10px;
+            "
+        ></textarea>
+
+        <br><br>
+
+        <button onclick="copyLectureText()">
+            📋 نسخ النص
+        </button>
+
+    </div>
+
+
+    <!-- منطقة النتائج المستقبلية -->
+
+    <div
+        id="resultSection"
+        style="
+            display:none;
+            margin-top:30px;
+            padding:25px;
+            background:white;
+            border-radius:15px;
+        "
+    >
+
+        <h2 id="resultTitle"></h2>
+
+        <div
+            id="resultContent"
+            style="
+                white-space:pre-wrap;
+                line-height:1.8;
+            "
+        ></div>
+
+    </div>
+
+
+    <br><br>
+
+    <a href="/">
+        العودة للرئيسية
+    </a>
+
+</div>
+
+
+<script>
+
+let currentLectureText = "";
+
+
+// رفع المحاضرة
+
+async function uploadLecture() {
+
+    const fileInput =
+        document.getElementById("audioFile");
+
+    const file =
+        fileInput.files[0];
+
+    const status =
+        document.getElementById("uploadStatus");
+
+    const button =
+        document.getElementById("uploadButton");
+
+
+    if (!file) {
+
+        alert("اختر ملفًا صوتيًا أولًا");
+
+        return;
+    }
+
+
+    const formData =
+        new FormData();
+
+    formData.append(
+        "audio",
+        file
+    );
+
+
+    try {
+
+        button.disabled = true;
+
+        button.innerText =
+            "جاري التحويل... ⏳";
+
+        status.innerText =
+            "يتم الآن رفع المحاضرة وتحويلها إلى نص، انتظر قليلاً...";
+
+
+        const response =
+            await fetch(
+                "/upload",
+                {
+                    method: "POST",
+                    body: formData
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok || data.error) {
+
+            status.innerText =
+                "❌ حدث خطأ";
+
+            alert(
+                "خطأ: " +
+                (data.error || "حدث خطأ غير معروف")
+            );
+
+            return;
+        }
+
+
+        currentLectureText =
+            data.text || "";
+
+
+        document.getElementById(
+            "lectureText"
+        ).value =
+            currentLectureText;
+
+
+        document.getElementById(
+            "transcriptionSection"
+        ).style.display =
+            "block";
+
+
+        status.innerText =
+            "✅ تم تحويل المحاضرة إلى نص بنجاح";
+
+
+        document.getElementById(
+            "transcriptionSection"
+        ).scrollIntoView({
+            behavior: "smooth"
+        });
+
+
+    } catch (error) {
+
+        console.error(error);
+
+        status.innerText =
+            "❌ تعذر الاتصال بالخادم";
+
+        alert(
+            "حدث خطأ أثناء إرسال الملف"
+        );
+
+    } finally {
+
+        button.disabled = false;
+
+        button.innerText =
+            "رفع المحاضرة";
+
+    }
+}
+
+
+// نسخ النص
+
+async function copyLectureText() {
+
+    const text =
+        document.getElementById(
+            "lectureText"
+        ).value;
+
+
+    if (!text) {
+
+        alert(
+            "لا يوجد نص لنسخه"
+        );
+
+        return;
+    }
+
+
+    try {
+
+        await navigator.clipboard.writeText(
+            text
+        );
+
+        alert(
+            "تم نسخ نص المحاضرة ✅"
+        );
+
+    } catch (error) {
+
+        alert(
+            "تعذر نسخ النص"
+        );
+
+    }
+}
+
+
+// التلخيص - سنربطه بالـ Gemini لاحقاً
+
+function summarizeLecture() {
+
+    if (!currentLectureText) {
+
+        alert(
+            "ارفع المحاضرة أولاً حتى يتم تحويلها إلى نص"
+        );
+
+        return;
+    }
+
+
+    alert(
+        "النص جاهز للتلخيص ✅"
+    );
+
+}
+
+
+// إنشاء الأسئلة - سنربطه بالـ Gemini لاحقاً
+
+function generateQuestions() {
+
+    if (!currentLectureText) {
+
+        alert(
+            "ارفع المحاضرة أولاً حتى يتم تحويلها إلى نص"
+        );
+
+        return;
+    }
+
+
+    alert(
+        "النص جاهز لإنشاء الأسئلة ✅"
+    );
+
+}
+
+</script>
+
+</body>
+
+</html>
