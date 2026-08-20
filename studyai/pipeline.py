@@ -10,6 +10,7 @@ from pathlib import Path
 
 from flask import current_app
 
+from .content import ContentGenerationError, generate_full_questions, generate_full_summary
 from .jobs import (
     ASSEMBLING,
     COMPLETED,
@@ -56,17 +57,27 @@ def process_pipeline(job_id: str, *, sleeper=time.sleep) -> None:
             )
             save_job_result(job_id, "transcript", transcript)
             transition_job(job_id, SUMMARIZING, JobProgress(SUMMARIZING, 82))
-            save_job_result(job_id, "summary", managed_ai.summarize(transcript))
+            segment_texts = [row["transcript"] for row in get_segments(job_id)]
+            budget = current_app.config["AI_INPUT_TOKEN_BUDGET"]
+            save_job_result(
+                job_id,
+                "summary",
+                generate_full_summary(managed_ai, transcript, segment_texts, budget),
+            )
             transition_job(
                 job_id, GENERATING_QUESTIONS, JobProgress(GENERATING_QUESTIONS, 92)
             )
             save_job_result(
-                job_id, "questions", managed_ai.generate_questions(transcript)
+                job_id,
+                "questions",
+                generate_full_questions(managed_ai, transcript, segment_texts, budget),
             )
             transition_job(job_id, COMPLETED, JobProgress(COMPLETED, 100))
         _cleanup_success(job_id)
         logger.info("lecture_job_completed job_id=%s", job_id)
-    except (MediaError, AIServiceError, CompletenessError, OSError) as error:
+    except (
+        MediaError, AIServiceError, CompletenessError, ContentGenerationError, OSError
+    ) as error:
         code = getattr(error, "code", "pipeline_failed")
         public = getattr(error, "public_message", "تعذرت معالجة المحاضرة كاملة.")
         fail_job(job_id, code, public)

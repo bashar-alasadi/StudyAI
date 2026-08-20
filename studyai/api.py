@@ -1,67 +1,70 @@
-"""Authenticated JSON API routes."""
+"""Owner-scoped processing job status, result, and retry API."""
 
 from __future__ import annotations
 
-from flask import Blueprint, current_app, jsonify, request
-from werkzeug.utils import secure_filename
+from flask import Blueprint, g, jsonify
 
 from .auth import login_required
-from .services.ai import AIService, AIServiceError
+from .jobs import FAILED, get_job, latest_job, prepare_retry
+from .queueing import get_job_queue
 
-api_bp = Blueprint("api", __name__, url_prefix="/api")
-ALLOWED_EXTENSIONS = {"mp3", "mp4", "mpeg", "mpga", "m4a", "wav", "webm", "ogg", "flac"}
-
-
-def get_ai_service():
-    factory = current_app.config.get("AI_SERVICE_FACTORY")
-    return factory() if factory else AIService.from_config(current_app.config)
+api_bp = Blueprint("api", __name__, url_prefix="/api/jobs")
 
 
-@api_bp.post("/transcriptions")
+@api_bp.get("/latest")
 @login_required
-def transcribe():
-    uploaded = request.files.get("audio")
-    if uploaded is None or not uploaded.filename:
-        return jsonify(error="اختر ملفًا صوتيًا أولًا."), 400
-    filename = secure_filename(uploaded.filename)
-    extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-    if extension not in ALLOWED_EXTENSIONS:
-        return jsonify(error="صيغة الملف غير مدعومة."), 415
-    try:
-        text = get_ai_service().transcribe(uploaded.stream, extension)
-    except AIServiceError as error:
-        current_app.logger.warning("Transcription failed: %s", error)
-        return jsonify(error=error.public_message), error.status_code
-    return jsonify(message="تم تحويل المحاضرة إلى نص.", filename=filename, text=text), 201
+def latest():
+    job = latest_job(g.user["id"])
+    return (jsonify(job=None), 200) if job is None else jsonify(_serialize_status(job))
 
 
-@api_bp.post("/summaries")
+@api_bp.get("/<job_id>")
 @login_required
-def summarize():
-    return _text_operation("summary")
+def status(job_id: str):
+    job = get_job(job_id, g.user["id"])
+    if job is None:
+        return jsonify(error="مهمة المعالجة غير موجودة."), 404
+    return jsonify(_serialize_status(job))
 
 
-@api_bp.post("/questions")
+@api_bp.get("/<job_id>/result")
 @login_required
-def questions():
-    return _text_operation("questions")
+def result(job_id: str):
+    job = get_job(job_id, g.user["id"])
+    if job is None:
+        return jsonify(error="مهمة المعالجة غير موجودة."), 404
+    if job["status"] != "completed":
+        return jsonify(error="نتيجة المحاضرة لم تكتمل بعد."), 409
+    return jsonify(
+        job_id=job["id"],
+        transcript=job["transcript"],
+        summary=job["summary"],
+        questions=job["questions"],
+    )
 
 
-def _text_operation(operation: str):
-    payload = request.get_json(silent=True) or {}
-    text = str(payload.get("text", "")).strip()
-    if len(text) < 20:
-        return jsonify(error="نص المحاضرة قصير جدًا أو غير موجود."), 400
-    if len(text) > 500_000:
-        return jsonify(error="نص المحاضرة يتجاوز الحد المسموح."), 413
-    try:
-        service = get_ai_service()
-        result = (
-            service.summarize(text)
-            if operation == "summary"
-            else service.generate_questions(text)
-        )
-    except AIServiceError as error:
-        current_app.logger.warning("AI text operation failed: %s", error)
-        return jsonify(error=error.public_message), error.status_code
-    return jsonify(result=result)
+@api_bp.post("/<job_id>/retry")
+@login_required
+def retry(job_id: str):
+    job = get_job(job_id, g.user["id"])
+    if job is None:
+        return jsonify(error="مهمة المعالجة غير موجودة."), 404
+    if job["status"] != FAILED:
+        return jsonify(error="يمكن إعادة محاولة المهام الفاشلة فقط."), 409
+    prepare_retry(job_id)
+    get_job_queue().enqueue(job_id)
+    return jsonify(job_id=job_id, status="queued"), 202
+
+
+def _serialize_status(job) -> dict[str, object]:
+    return {
+        "job_id": job["id"],
+        "status": job["status"],
+        "stage": job["current_stage"],
+        "progress": job["progress"],
+        "completed_segments": job["completed_segments"],
+        "total_segments": job["total_segments"],
+        "filename": job["original_filename"],
+        "error": job["safe_error_message"],
+        "created_at": job["created_at"],
+    }

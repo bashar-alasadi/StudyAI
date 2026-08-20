@@ -44,6 +44,7 @@ def build_config(environ: Mapping[str, str] | None = None) -> dict[str, object]:
             env, "GEMINI_FILE_READY_TIMEOUT_SECONDS", 120
         ),
         "GEMINI_FILE_POLL_SECONDS": _positive_int(env, "GEMINI_FILE_POLL_SECONDS", 2),
+        "AI_INPUT_TOKEN_BUDGET": _positive_int(env, "AI_INPUT_TOKEN_BUDGET", 700000),
         "SESSION_COOKIE_HTTPONLY": True,
         "SESSION_COOKIE_SAMESITE": "Lax",
         "SESSION_COOKIE_SECURE": environment == "production",

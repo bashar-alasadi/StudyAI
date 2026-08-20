@@ -228,6 +228,20 @@ def save_job_result(job_id: str, field: str, value: str) -> None:
     database.commit()
 
 
+def prepare_retry(job_id: str) -> None:
+    job = get_job(job_id)
+    if job is None or job["status"] != FAILED:
+        raise InvalidJobTransition("Only failed jobs can be retried")
+    transition_job(job_id, QUEUED, JobProgress(QUEUED, job["progress"]))
+    database = get_db()
+    database.execute(
+        """UPDATE processing_jobs SET error_code = NULL, safe_error_message = NULL,
+           completed_at = NULL, updated_at = ? WHERE id = ?""",
+        (_utc_now(), job_id),
+    )
+    database.commit()
+
+
 def _validate_percentage(value: int) -> int:
     if not 0 <= value <= 100:
         raise ValueError("Progress must be between 0 and 100")

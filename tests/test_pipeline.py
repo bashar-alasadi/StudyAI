@@ -51,6 +51,9 @@ class FakePipelineAI:
         self.failures = dict(failures or {})
         self.calls = []
 
+    def count_tokens(self, text):
+        return len(text)
+
     def transcribe_path(self, path):
         index = int(path.stem.split("-")[-1])
         self.calls.append(index)
