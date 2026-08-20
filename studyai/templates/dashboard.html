@@ -2,30 +2,44 @@
 {% block title %}لوحة الدراسة — StudyAI{% endblock %}
 {% block content %}
 <section class="dashboard-shell">
-  <div class="dashboard-heading"><div><span class="eyebrow">لوحة الدراسة</span><h1>أهلًا، {{ g.user.name }}</h1><p>ابدأ برفع تسجيل المحاضرة، ثم استخدم النص للمراجعة.</p></div><span class="status-dot">الخدمة جاهزة</span></div>
+  <div class="dashboard-heading">
+    <div><span class="eyebrow">لوحة الدراسة</span><h1>أهلًا، {{ g.user.name }}</h1><p>ارفع المحاضرة مرة، واترك المعالجة تستمر حتى لو أغلقت الصفحة.</p></div>
+    <span class="status-dot">الخدمة جاهزة</span>
+  </div>
   <div class="workspace">
     <aside class="stepper" aria-label="مراحل العمل">
-      <button class="step active" data-target="upload-panel"><span>1</span><div><strong>رفع المحاضرة</strong><small>ملف صوتي أو فيديو</small></div></button>
-      <button class="step" data-target="transcript-panel"><span>2</span><div><strong>النص</strong><small>راجع وانسخ المحتوى</small></div></button>
-      <button class="step" data-target="results-panel"><span>3</span><div><strong>المذاكرة</strong><small>ملخص وأسئلة</small></div></button>
+      <button class="step active" data-target="upload-panel"><span>1</span><div><strong>رفع المحاضرة</strong><small>رفع مجزأ قابل للاستئناف</small></div></button>
+      <button class="step" data-target="progress-panel"><span>2</span><div><strong>المعالجة</strong><small>تقدم حقيقي محفوظ</small></div></button>
+      <button class="step" data-target="results-panel"><span>3</span><div><strong>النتيجة</strong><small>نص، ملخص، وأسئلة</small></div></button>
     </aside>
     <div class="panel-stack">
       <section id="upload-panel" class="panel">
-        <div class="panel-heading"><div><span class="panel-number">01</span><h2>ارفع تسجيل المحاضرة</h2></div><span class="file-limit">حتى 100 MB</span></div>
+        <div class="panel-heading"><div><span class="panel-number">01</span><h2>ارفع تسجيل المحاضرة</h2></div><span class="file-limit">حتى 5 GB</span></div>
         <label class="drop-zone" id="drop-zone">
-          <input id="audio-file" type="file" accept="audio/*,video/mp4,video/webm" hidden>
-          <span class="upload-icon">↑</span><strong>اسحب الملف هنا أو اضغط للاختيار</strong><small>MP3, M4A, WAV, MP4, WEBM, OGG, FLAC</small>
-          <span id="file-name" class="chosen-file"></span>
+          <input id="audio-file" type="file" accept="audio/*,video/*" hidden>
+          <span class="upload-icon">↑</span><strong>اسحب الملف هنا أو اضغط للاختيار</strong>
+          <small>MP3, M4A, WAV, MP4, WEBM, OGG, FLAC</small><span id="file-name" class="chosen-file"></span>
         </label>
-        <button id="upload-button" class="button" type="button">تحويل المحاضرة إلى نص</button>
+        <button id="upload-button" class="button" type="button">رفع المحاضرة وبدء المعالجة</button>
         <div id="upload-status" class="status" role="status" aria-live="polite"></div>
       </section>
-      <section id="transcript-panel" class="panel hidden">
-        <div class="panel-heading"><div><span class="panel-number">02</span><h2>نص المحاضرة</h2></div><button id="copy-button" class="button button-ghost" type="button">نسخ النص</button></div>
-        <textarea id="lecture-text" aria-label="نص المحاضرة"></textarea>
-        <div class="action-row"><button id="summary-button" class="button" type="button">إنشاء ملخص</button><button id="questions-button" class="button button-secondary" type="button">إنشاء أسئلة</button></div>
+      <section id="progress-panel" class="panel hidden">
+        <div class="panel-heading"><div><span class="panel-number">02</span><h2>تقدم المعالجة</h2></div><strong id="progress-percent">0%</strong></div>
+        <div class="progress-track" aria-hidden="true"><span id="progress-bar"></span></div>
+        <p id="stage-message" class="stage-message">جارٍ تجهيز المهمة…</p>
+        <p id="segment-progress" class="status"></p>
+        <button id="retry-button" class="button button-secondary hidden" type="button">إعادة المحاولة من موضع التوقف</button>
       </section>
-      <section id="results-panel" class="panel hidden"><div class="panel-heading"><div><span class="panel-number">03</span><h2 id="result-title">نتيجة المذاكرة</h2></div></div><div id="result-content" class="result-content"></div></section>
+      <section id="results-panel" class="panel hidden">
+        <div class="panel-heading"><div><span class="panel-number">03</span><h2>نتيجة المحاضرة الكاملة</h2></div></div>
+        <div class="result-tabs" role="tablist">
+          <button class="result-tab active" data-result="transcript" type="button">النص الكامل</button>
+          <button class="result-tab" data-result="summary" type="button">الملخص</button>
+          <button class="result-tab" data-result="questions" type="button">الأسئلة</button>
+          <button id="copy-button" class="button button-ghost" type="button">نسخ</button>
+        </div>
+        <div id="result-content" class="result-content" tabindex="0"></div>
+      </section>
     </div>
   </div>
 </section>
