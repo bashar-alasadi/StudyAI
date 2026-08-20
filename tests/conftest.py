@@ -24,6 +24,11 @@ def app(tmp_path):
         "DATABASE": str(tmp_path / "test.sqlite3"),
         "AI_SERVICE_FACTORY": FakeAIService,
         "JOB_QUEUE_MODE": "sync",
+        "UPLOAD_ROOT": str(tmp_path / "uploads"),
+        "MAX_UPLOAD_SIZE_BYTES": 1024,
+        "UPLOAD_CHUNK_SIZE_BYTES": 4,
+        "MAX_CONTENT_LENGTH": 1024,
+        "MIN_FREE_DISK_MB": 0,
     })
 
 

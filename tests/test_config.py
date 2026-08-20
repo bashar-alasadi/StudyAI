@@ -59,5 +59,5 @@ def test_test_config_remains_injectable(monkeypatch, tmp_path):
 
 @pytest.mark.parametrize("value", ["0", "-1", "not-a-number"])
 def test_invalid_upload_limit_fails_safely(value):
-    with pytest.raises(RuntimeError, match="MAX_UPLOAD_MB"):
-        build_config({"MAX_UPLOAD_MB": value})
+    with pytest.raises(RuntimeError, match="MAX_UPLOAD_GB"):
+        build_config({"MAX_UPLOAD_GB": value})

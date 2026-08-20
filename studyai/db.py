@@ -62,6 +62,34 @@ CREATE TABLE IF NOT EXISTS transcription_segments (
 
 CREATE INDEX IF NOT EXISTS idx_segments_job_status
 ON transcription_segments(job_id, status);
+
+CREATE TABLE IF NOT EXISTS upload_sessions (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    original_filename TEXT NOT NULL,
+    extension TEXT NOT NULL,
+    total_size INTEGER NOT NULL CHECK (total_size > 0),
+    chunk_size INTEGER NOT NULL CHECK (chunk_size > 0),
+    expected_chunks INTEGER NOT NULL CHECK (expected_chunks > 0),
+    received_chunks INTEGER NOT NULL DEFAULT 0 CHECK (received_chunks >= 0),
+    status TEXT NOT NULL,
+    assembled_path TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_upload_sessions_user_created
+ON upload_sessions(user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS upload_chunks (
+    upload_id TEXT NOT NULL REFERENCES upload_sessions(id) ON DELETE CASCADE,
+    chunk_index INTEGER NOT NULL CHECK (chunk_index >= 0),
+    size INTEGER NOT NULL CHECK (size > 0),
+    sha256 TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(upload_id, chunk_index)
+);
 """
 
 

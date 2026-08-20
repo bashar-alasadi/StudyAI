@@ -50,14 +50,21 @@ class JobProgress:
     total_segments: int | None = None
 
 
-def create_job(user_id: int, filename: str, size: int = 0, status: str = UPLOADING) -> str:
+def create_job(
+    user_id: int,
+    filename: str,
+    size: int = 0,
+    status: str = UPLOADING,
+    upload_id: str | None = None,
+) -> str:
     job_id = uuid.uuid4().hex
     database = get_db()
     database.execute(
         """INSERT INTO processing_jobs
-           (id, user_id, status, original_filename, original_size, current_stage, progress)
-           VALUES (?, ?, ?, ?, ?, ?, 0)""",
-        (job_id, user_id, status, filename, size, status),
+           (id, user_id, upload_id, status, original_filename, original_size,
+            current_stage, progress)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 0)""",
+        (job_id, user_id, upload_id, status, filename, size, status),
     )
     database.commit()
     return job_id
@@ -76,6 +83,14 @@ def latest_job(user_id: int):
     return get_db().execute(
         "SELECT * FROM processing_jobs WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
         (user_id,),
+    ).fetchone()
+
+
+def get_job_for_upload(upload_id: str, user_id: int):
+    return get_db().execute(
+        """SELECT * FROM processing_jobs
+           WHERE upload_id = ? AND user_id = ? ORDER BY created_at LIMIT 1""",
+        (upload_id, user_id),
     ).fetchone()
 
 

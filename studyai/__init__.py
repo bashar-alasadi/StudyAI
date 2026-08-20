@@ -15,6 +15,7 @@ from .auth import auth_bp, load_logged_in_user
 from .config import DEVELOPMENT_SECRET, build_config
 from .csrf import ensure_csrf_token
 from .queueing import init_queue
+from .uploads import uploads_bp
 
 
 def create_app(test_config: dict | None = None) -> Flask:
@@ -34,6 +35,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.before_request(ensure_csrf_token)
     app.register_blueprint(auth_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(uploads_bp)
 
     @app.get("/")
     def index():
