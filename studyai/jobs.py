@@ -25,7 +25,7 @@ TERMINAL_STATES = frozenset({COMPLETED, FAILED, CANCELLED})
 TRANSITIONS = {
     UPLOADING: {UPLOADED, FAILED, CANCELLED},
     UPLOADED: {QUEUED, FAILED, CANCELLED},
-    QUEUED: {PREPARING_MEDIA, FAILED, CANCELLED},
+    QUEUED: {PREPARING_MEDIA, TRANSCRIBING, FAILED, CANCELLED},
     PREPARING_MEDIA: {SEGMENTING, FAILED, CANCELLED},
     SEGMENTING: {TRANSCRIBING, FAILED, CANCELLED},
     TRANSCRIBING: {ASSEMBLING, FAILED, CANCELLED},
@@ -101,6 +101,10 @@ def transition_job(job_id: str, target: str, progress: JobProgress | None = None
     ).fetchone()
     if current is None:
         raise LookupError(f"Unknown job {job_id}")
+    if target == current["status"]:
+        if progress:
+            update_progress(job_id, progress)
+        return
     if target not in TRANSITIONS[current["status"]]:
         raise InvalidJobTransition(f"Cannot transition {current['status']} to {target}")
     values: list[object] = [target, target, _utc_now()]
@@ -146,6 +150,80 @@ def fail_job(job_id: str, code: str, safe_message: str) -> None:
         """UPDATE processing_jobs SET status = ?, current_stage = ?, error_code = ?,
            safe_error_message = ?, completed_at = ?, updated_at = ? WHERE id = ?""",
         (FAILED, FAILED, code, safe_message, _utc_now(), _utc_now(), job_id),
+    )
+    database.commit()
+
+
+def set_media_metadata(job_id: str, media_type: str, duration_seconds: float) -> None:
+    database = get_db()
+    database.execute(
+        """UPDATE processing_jobs
+           SET media_type = ?, duration_seconds = ?, updated_at = ? WHERE id = ?""",
+        (media_type, duration_seconds, _utc_now(), job_id),
+    )
+    database.commit()
+
+
+def create_segments(job_id: str, segments) -> None:
+    database = get_db()
+    for segment in segments:
+        database.execute(
+            """INSERT INTO transcription_segments
+               (job_id, segment_index, start_seconds, end_seconds, status)
+               VALUES (?, ?, ?, ?, 'pending')
+               ON CONFLICT(job_id, segment_index) DO UPDATE SET
+                 start_seconds = excluded.start_seconds, end_seconds = excluded.end_seconds""",
+            (job_id, segment.index, segment.start_seconds, segment.end_seconds),
+        )
+    database.execute(
+        "UPDATE processing_jobs SET total_segments = ?, updated_at = ? WHERE id = ?",
+        (len(segments), _utc_now(), job_id),
+    )
+    database.commit()
+
+
+def get_segments(job_id: str):
+    return get_db().execute(
+        "SELECT * FROM transcription_segments WHERE job_id = ? ORDER BY segment_index",
+        (job_id,),
+    ).fetchall()
+
+
+def mark_segment_retry(job_id: str, index: int, safe_error: str) -> None:
+    database = get_db()
+    database.execute(
+        """UPDATE transcription_segments SET status = 'pending', retry_count = retry_count + 1,
+           last_error = ? WHERE job_id = ? AND segment_index = ?""",
+        (safe_error[:500], job_id, index),
+    )
+    database.commit()
+
+
+def complete_segment(job_id: str, index: int, transcript: str) -> None:
+    database = get_db()
+    database.execute(
+        """UPDATE transcription_segments SET status = 'completed', transcript = ?,
+           last_error = NULL, completed_at = ? WHERE job_id = ? AND segment_index = ?""",
+        (transcript, _utc_now(), job_id, index),
+    )
+    completed = database.execute(
+        "SELECT COUNT(*) FROM transcription_segments WHERE job_id = ? AND status = 'completed'",
+        (job_id,),
+    ).fetchone()[0]
+    database.execute(
+        "UPDATE processing_jobs SET completed_segments = ?, updated_at = ? WHERE id = ?",
+        (completed, _utc_now(), job_id),
+    )
+    database.commit()
+
+
+def save_job_result(job_id: str, field: str, value: str) -> None:
+    if field not in {"transcript", "summary", "questions"}:
+        raise ValueError("Unsupported job result field")
+    database = get_db()
+    database.execute(
+        f"UPDATE processing_jobs SET {field} = ?, updated_at = ? WHERE id = ?",
+        (value, _utc_now(), job_id),
     )
     database.commit()
 
