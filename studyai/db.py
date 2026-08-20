@@ -17,6 +17,51 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS processing_jobs (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    upload_id TEXT,
+    status TEXT NOT NULL,
+    original_filename TEXT NOT NULL,
+    media_type TEXT,
+    original_size INTEGER NOT NULL DEFAULT 0 CHECK (original_size >= 0),
+    duration_seconds REAL,
+    total_segments INTEGER NOT NULL DEFAULT 0 CHECK (total_segments >= 0),
+    completed_segments INTEGER NOT NULL DEFAULT 0 CHECK (completed_segments >= 0),
+    current_stage TEXT NOT NULL,
+    progress INTEGER NOT NULL DEFAULT 0 CHECK (progress BETWEEN 0 AND 100),
+    transcript TEXT,
+    summary TEXT,
+    questions TEXT,
+    error_code TEXT,
+    safe_error_message TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    started_at TEXT,
+    completed_at TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_processing_jobs_user_created
+ON processing_jobs(user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS transcription_segments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id TEXT NOT NULL REFERENCES processing_jobs(id) ON DELETE CASCADE,
+    segment_index INTEGER NOT NULL CHECK (segment_index >= 0),
+    start_seconds REAL NOT NULL CHECK (start_seconds >= 0),
+    end_seconds REAL NOT NULL CHECK (end_seconds > start_seconds),
+    status TEXT NOT NULL,
+    transcript TEXT,
+    retry_count INTEGER NOT NULL DEFAULT 0 CHECK (retry_count >= 0),
+    last_error TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at TEXT,
+    UNIQUE(job_id, segment_index)
+);
+
+CREATE INDEX IF NOT EXISTS idx_segments_job_status
+ON transcription_segments(job_id, status);
 """
 
 

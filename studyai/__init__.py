@@ -14,6 +14,7 @@ from .api import api_bp
 from .auth import auth_bp, load_logged_in_user
 from .config import DEVELOPMENT_SECRET, build_config
 from .csrf import ensure_csrf_token
+from .queueing import init_queue
 
 
 def create_app(test_config: dict | None = None) -> Flask:
@@ -28,6 +29,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     _configure_logging(app)
 
     db.init_app(app)
+    init_queue(app)
     app.before_request(load_logged_in_user)
     app.before_request(ensure_csrf_token)
     app.register_blueprint(auth_bp)

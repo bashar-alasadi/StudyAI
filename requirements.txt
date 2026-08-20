@@ -1,4 +1,6 @@
 Flask>=3.1,<4
 google-genai>=1.30,<2
 python-dotenv>=1.1,<2
+redis>=6,<7
+rq>=2.2,<3
 gunicorn>=23,<24; platform_system != "Windows"

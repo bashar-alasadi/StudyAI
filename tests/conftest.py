@@ -23,6 +23,7 @@ def app(tmp_path):
         "SECRET_KEY": "test-secret",
         "DATABASE": str(tmp_path / "test.sqlite3"),
         "AI_SERVICE_FACTORY": FakeAIService,
+        "JOB_QUEUE_MODE": "sync",
     })
 
 
