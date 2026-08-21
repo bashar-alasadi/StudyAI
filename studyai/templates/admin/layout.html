@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{% block admin_title %}الإدارة{% endblock %} — StudyAI{% endblock %}
+{% block content %}
+<section class="admin-shell">
+  <aside class="admin-sidebar">
+    <span class="eyebrow">StudyAI</span><h2>لوحة الإدارة</h2>
+    <nav>
+      <a href="{{ url_for('admin.dashboard') }}">نظرة عامة</a>
+      <a href="{{ url_for('admin.users') }}">المستخدمون</a>
+      <a href="{{ url_for('admin.jobs') }}">المهام والمعالجة</a>
+      <a href="{{ url_for('admin.providers') }}">مزوّدو الذكاء الاصطناعي</a>
+    </nav>
+  </aside>
+  <div class="admin-content">{% block admin_content %}{% endblock %}</div>
+</section>
+{% endblock %}

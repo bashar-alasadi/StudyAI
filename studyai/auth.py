@@ -39,9 +39,15 @@ def load_logged_in_user() -> None:
         None
         if user_id is None
         else get_db()
-        .execute("SELECT id, name, username, email FROM users WHERE id = ?", (user_id,))
+        .execute(
+            "SELECT id, name, username, email, is_admin, is_active FROM users WHERE id = ?",
+            (user_id,),
+        )
         .fetchone()
     )
+    if g.user is not None and not g.user["is_active"]:
+        session.clear()
+        g.user = None
 
 
 def login_required(view):
@@ -71,8 +77,16 @@ def register():
             try:
                 database = get_db()
                 database.execute(
-                    "INSERT INTO users (name, username, email, password_hash) VALUES (?, ?, ?, ?)",
-                    (name, username, email, generate_password_hash(password)),
+                    """INSERT INTO users
+                       (name, username, email, password_hash, is_admin)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (
+                        name,
+                        username,
+                        email,
+                        generate_password_hash(password),
+                        int(email in current_app.config["ADMIN_EMAILS"]),
+                    ),
                 )
                 database.commit()
             except sqlite3.IntegrityError:
@@ -101,6 +115,8 @@ def login():
         )
         if user is None or not check_password_hash(user["password_hash"], password):
             flash("اسم المستخدم أو كلمة المرور غير صحيحة.", "error")
+        elif not user["is_active"]:
+            flash("هذا الحساب موقوف. تواصل مع إدارة الموقع.", "error")
         else:
             session.clear()
             session["user_id"] = user["id"]

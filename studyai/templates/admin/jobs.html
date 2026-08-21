@@ -1,0 +1,8 @@
+{% extends "admin/layout.html" %}
+{% block admin_title %}المهام{% endblock %}
+{% block admin_content %}
+<div class="admin-heading"><div><span class="eyebrow">المعالجة</span><h1>المهام والمحاضرات</h1></div></div>
+<section class="admin-card"><div class="table-wrap"><table><thead><tr><th>المستخدم</th><th>الملف</th><th>الحالة</th><th>المرحلة</th><th>الحجم</th><th>التقدم</th><th>التاريخ</th></tr></thead><tbody>
+{% for job in jobs %}<tr><td>@{{ job.username }}</td><td>{{ job.original_filename }}</td><td><span class="badge badge-{{ job.status }}">{{ job.status }}</span></td><td>{{ job.current_stage }}</td><td>{{ (job.original_size / 1048576)|round(1) }} MB</td><td>{{ job.progress }}%</td><td>{{ job.created_at }}</td></tr>{% else %}<tr><td colspan="7">لا توجد مهام.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}

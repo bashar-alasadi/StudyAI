@@ -143,6 +143,7 @@ Required production environment variables:
 ```dotenv
 APP_ENV=production
 SECRET_KEY=generate-a-long-random-secret
+ADMIN_EMAILS=owner@your-domain.example
 GEMINI_API_KEY=your-google-ai-api-key
 REDIS_URL=redis://your-private-redis:6379/0
 DATABASE_PATH=/app/instance/studyai.sqlite3
@@ -160,6 +161,19 @@ SMTP_USE_SSL=false
 The deployment must provide enough persistent disk for the configured `MAX_UPLOAD_GB`. Never expose
 Redis publicly or commit real secrets. `docker compose up --build` reproduces the production topology
 locally when Docker is available.
+
+### Administration
+
+Set `ADMIN_EMAILS` to the owner's email before registering. Matching accounts receive administrator
+access automatically and see the `/admin/` dashboard. For an existing account, run:
+
+```powershell
+flask --app app promote-admin owner@example.com
+```
+
+Administrators can review site statistics and processing jobs, suspend/reactivate users, grant/revoke
+administrator access, and configure the active Gemini model and API key. Provider keys are encrypted at
+rest using the application's `SECRET_KEY`; changing that secret invalidates saved provider keys.
 
 ## Password reset email
 

@@ -18,6 +18,17 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS ai_providers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    provider_type TEXT NOT NULL,
+    model TEXT NOT NULL,
+    api_key_encrypted TEXT,
+    is_active INTEGER NOT NULL DEFAULT 0 CHECK (is_active IN (0, 1)),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS processing_jobs (
     id TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -110,7 +121,14 @@ def close_db(_error=None) -> None:
 
 
 def init_db() -> None:
-    get_db().executescript(SCHEMA)
+    database = get_db()
+    database.executescript(SCHEMA)
+    columns = {row["name"] for row in database.execute("PRAGMA table_info(users)")}
+    if "is_admin" not in columns:
+        database.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
+    if "is_active" not in columns:
+        database.execute("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
+    database.commit()
 
 
 @click.command("init-db")

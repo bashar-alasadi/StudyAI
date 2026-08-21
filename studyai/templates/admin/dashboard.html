@@ -1,0 +1,17 @@
+{% extends "admin/layout.html" %}
+{% block admin_title %}نظرة عامة{% endblock %}
+{% block admin_content %}
+<div class="admin-heading"><div><span class="eyebrow">نظرة عامة</span><h1>مرحبًا {{ g.user.name }}</h1></div><span class="status-dot">النظام يعمل</span></div>
+<div class="stat-grid">
+  <article><strong>{{ stats.users }}</strong><span>إجمالي المستخدمين</span></article>
+  <article><strong>{{ stats.active_users }}</strong><span>حساب نشط</span></article>
+  <article><strong>{{ stats.jobs }}</strong><span>إجمالي المهام</span></article>
+  <article><strong>{{ stats.completed_jobs }}</strong><span>مهمة مكتملة</span></article>
+  <article><strong>{{ stats.failed_jobs }}</strong><span>مهمة فاشلة</span></article>
+</div>
+<section class="admin-card"><div class="admin-card-heading"><h2>أحدث المهام</h2><a href="{{ url_for('admin.jobs') }}">عرض الكل</a></div>
+  <div class="table-wrap"><table><thead><tr><th>المستخدم</th><th>الملف</th><th>الحالة</th><th>التقدم</th><th>التاريخ</th></tr></thead><tbody>
+  {% for job in recent_jobs %}<tr><td>{{ job.username }}</td><td>{{ job.original_filename }}</td><td><span class="badge badge-{{ job.status }}">{{ job.status }}</span></td><td>{{ job.progress }}%</td><td>{{ job.created_at }}</td></tr>{% else %}<tr><td colspan="5">لا توجد مهام بعد.</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+{% endblock %}

@@ -31,6 +31,11 @@ def build_config(environ: Mapping[str, str] | None = None) -> dict[str, object]:
         in {"1", "true", "yes", "on"},
         "SMTP_USE_SSL": env.get("SMTP_USE_SSL", "false").strip().lower()
         in {"1", "true", "yes", "on"},
+        "ADMIN_EMAILS": {
+            email.strip().lower()
+            for email in env.get("ADMIN_EMAILS", "").split(",")
+            if email.strip()
+        },
         "GEMINI_MODEL": env.get("GEMINI_MODEL", "gemini-3.6-flash"),
         "REDIS_URL": env.get("REDIS_URL", "redis://localhost:6379/0"),
         "RQ_QUEUE": env.get("RQ_QUEUE", "studyai"),

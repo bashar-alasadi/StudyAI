@@ -1,0 +1,19 @@
+{% extends "admin/layout.html" %}
+{% block admin_title %}مزوّدو الذكاء الاصطناعي{% endblock %}
+{% block admin_content %}
+<div class="admin-heading"><div><span class="eyebrow">AI</span><h1>مزوّدو الذكاء الاصطناعي</h1><p>المزوّد النشط يُستخدم تلقائيًا في الطلبات الجديدة.</p></div></div>
+<section class="admin-card provider-form"><h2>إضافة مزوّد Gemini</h2><form method="post" action="{{ url_for('admin.create_provider') }}">
+  <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+  <label>اسم تعريفي<input name="name" required maxlength="80" placeholder="Gemini الرئيسي"></label>
+  <label>نوع المزوّد<select name="provider_type"><option value="gemini">Google Gemini</option></select></label>
+  <label>النموذج<input name="model" required maxlength="120" placeholder="gemini-2.5-flash"></label>
+  <label>مفتاح API<input name="api_key" type="password" required autocomplete="new-password"><small>يُشفّر قبل تخزينه ولن يظهر مرة أخرى.</small></label>
+  <button class="button">حفظ المزوّد</button>
+</form></section>
+<section class="provider-grid">
+{% for provider in providers %}<article class="admin-card provider-card"><div><span class="badge">{{ provider.provider_type }}</span>{% if provider.is_active %}<span class="badge badge-completed">نشط</span>{% endif %}</div><h3>{{ provider.name }}</h3><p>{{ provider.model }}</p><small>المفتاح: ••••••••••••</small><div class="table-actions">
+  {% if not provider.is_active %}<form method="post" action="{{ url_for('admin.activate_provider', provider_id=provider.id) }}"><input type="hidden" name="csrf_token" value="{{ session.csrf_token }}"><button class="button button-small">تفعيل</button></form>{% endif %}
+  <form method="post" action="{{ url_for('admin.delete_provider', provider_id=provider.id) }}"><input type="hidden" name="csrf_token" value="{{ session.csrf_token }}"><button class="button button-ghost">حذف</button></form>
+</div></article>{% else %}<article class="admin-card"><p>لا يوجد مزوّد محفوظ. يستمر النظام باستخدام إعدادات البيئة حتى تضيف مزوّدًا وتفعّله.</p></article>{% endfor %}
+</section>
+{% endblock %}

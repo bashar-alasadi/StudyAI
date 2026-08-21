@@ -13,8 +13,13 @@ logger = logging.getLogger(__name__)
 
 class AIServiceError(RuntimeError):
     def __init__(
-        self, message: str, public_message: str, status_code: int = 502, *,
-        retryable: bool = False, code: str = "provider_error",
+        self,
+        message: str,
+        public_message: str,
+        status_code: int = 502,
+        *,
+        retryable: bool = False,
+        code: str = "provider_error",
     ):
         super().__init__(message)
         self.public_message = public_message
@@ -25,8 +30,12 @@ class AIServiceError(RuntimeError):
 
 class AIService:
     def __init__(
-        self, client, model: str, file_ready_timeout: int = 120,
-        poll_seconds: int = 2, sleeper=time.sleep,
+        self,
+        client,
+        model: str,
+        file_ready_timeout: int = 120,
+        poll_seconds: int = 2,
+        sleeper=time.sleep,
     ):
         self.client = client
         self.model = model
@@ -36,11 +45,16 @@ class AIService:
 
     @classmethod
     def from_config(cls, config):
+        from ..providers import resolve_ai_config
+
+        config = resolve_ai_config(config)
         api_key = config.get("GEMINI_API_KEY")
         if not api_key:
             raise AIServiceError(
-                "GEMINI_API_KEY is missing", "خدمة الذكاء الاصطناعي غير مهيأة.",
-                503, code="missing_api_key",
+                "GEMINI_API_KEY is missing",
+                "خدمة الذكاء الاصطناعي غير مهيأة.",
+                503,
+                code="missing_api_key",
             )
         try:
             from google import genai
@@ -52,7 +66,9 @@ class AIService:
         timeout_ms = config["GEMINI_REQUEST_TIMEOUT_SECONDS"] * 1000
         client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=timeout_ms))
         return cls(
-            client, config["GEMINI_MODEL"], config["GEMINI_FILE_READY_TIMEOUT_SECONDS"],
+            client,
+            config["GEMINI_MODEL"],
+            config["GEMINI_FILE_READY_TIMEOUT_SECONDS"],
             config["GEMINI_FILE_POLL_SECONDS"],
         )
 
@@ -137,14 +153,16 @@ class AIService:
                 raise AIServiceError(
                     "Gemini file processing timed out",
                     "استغرقت تهيئة الملف وقتًا أطول من المسموح.",
-                    retryable=True, code="file_timeout",
+                    retryable=True,
+                    code="file_timeout",
                 )
             self.sleeper(self.poll_seconds)
             remote_file = self.client.files.get(name=remote_file.name)
         state = self._state_name(remote_file)
         if state in {"FAILED", "ERROR"}:
             raise AIServiceError(
-                f"Gemini file entered {state}", "رفض مزوّد الذكاء الاصطناعي الملف.",
+                f"Gemini file entered {state}",
+                "رفض مزوّد الذكاء الاصطناعي الملف.",
                 code="file_rejected",
             )
         return remote_file
@@ -160,8 +178,10 @@ class AIService:
         text = (getattr(response, "text", None) or "").strip()
         if not text:
             raise AIServiceError(
-                "Empty response from Gemini", "لم تُرجع الخدمة نتيجة قابلة للعرض.",
-                retryable=True, code="empty_response",
+                "Empty response from Gemini",
+                "لم تُرجع الخدمة نتيجة قابلة للعرض.",
+                retryable=True,
+                code="empty_response",
             )
         return text
 
@@ -169,10 +189,17 @@ class AIService:
     def _classify(error: Exception, public_message: str) -> AIServiceError:
         status = getattr(error, "status_code", None) or getattr(error, "code", None)
         retryable = isinstance(error, (TimeoutError, ConnectionError)) or status in {
-            408, 429, 500, 502, 503, 504
+            408,
+            429,
+            500,
+            502,
+            503,
+            504,
         }
         return AIServiceError(
-            f"{type(error).__name__}: {error}", public_message, 502,
+            f"{type(error).__name__}: {error}",
+            public_message,
+            502,
             retryable=retryable,
             code="provider_transient" if retryable else "provider_rejected",
         )

@@ -17,6 +17,7 @@
       <a href="{{ url_for('index') }}#features">المزايا</a>
       {% if g.user %}
         <a href="{{ url_for('auth.dashboard') }}">لوحة الدراسة</a>
+        {% if g.user.is_admin %}<a href="{{ url_for('admin.dashboard') }}">الإدارة</a>{% endif %}
         <form action="{{ url_for('auth.logout') }}" method="post" class="inline-form">
           <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
           <button class="nav-button" type="submit">تسجيل الخروج</button>

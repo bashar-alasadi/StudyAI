@@ -13,6 +13,7 @@ from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from . import db
+from .admin import admin_bp, promote_admin_command
 from .api import api_bp
 from .auth import auth_bp, load_logged_in_user
 from .config import DEVELOPMENT_SECRET, build_config
@@ -39,8 +40,10 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.before_request(load_logged_in_user)
     app.before_request(ensure_csrf_token)
     app.register_blueprint(auth_bp)
+    app.register_blueprint(admin_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(uploads_bp)
+    app.cli.add_command(promote_admin_command)
 
     @app.get("/")
     def index():
