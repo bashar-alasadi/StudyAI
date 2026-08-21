@@ -158,3 +158,25 @@ def test_expired_failed_job_media_cleanup_preserves_records(app):
         assert database.execute(
             "SELECT assembled_path FROM upload_sessions WHERE id = ?", (upload["id"],)
         ).fetchone()["assembled_path"] is None
+
+
+def test_queue_failure_is_persisted_as_retryable_job_failure(app, client):
+    class BrokenQueue:
+        def enqueue(self, _job_id):
+            raise ConnectionError("redis unavailable")
+
+    register_and_login(client)
+    upload_id = initialize(client, total_size=4, chunk_size=4).get_json()["upload_id"]
+    assert put_chunk(client, upload_id, 0, b"data").status_code == 200
+    app.extensions["job_queue"] = BrokenQueue()
+
+    response = client.post(
+        f"/api/uploads/{upload_id}/complete", headers={"X-CSRF-Token": csrf(client)}
+    )
+
+    assert response.status_code == 503
+    with app.app_context():
+        job = get_db().execute(
+            "SELECT status, error_code FROM processing_jobs WHERE upload_id = ?", (upload_id,)
+        ).fetchone()
+        assert (job["status"], job["error_code"]) == ("failed", "queue_unavailable")

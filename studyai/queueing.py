@@ -23,12 +23,17 @@ class RQJobQueue:
         queued = self.queue.enqueue(
             "studyai.tasks.process_lecture_job",
             job_id,
-            job_id=f"studyai:{job_id}",
+            job_id=rq_job_id(job_id),
             job_timeout=self.timeout,
             result_ttl=86400,
             failure_ttl=604800,
         )
         return queued.id
+
+
+def rq_job_id(job_id: str) -> str:
+    """Build an RQ-compatible deterministic identifier."""
+    return f"studyai-{job_id}"
 
 
 class SynchronousJobQueue:

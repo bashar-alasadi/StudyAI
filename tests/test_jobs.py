@@ -15,6 +15,7 @@ from studyai.jobs import (
     create_job,
     get_job,
     latest_job,
+    prepare_interrupted_resume,
     transition_job,
     update_progress,
 )
@@ -74,3 +75,39 @@ def test_synchronous_queue_is_testable():
     queue = SynchronousJobQueue(calls.append)
     assert queue.enqueue("job-id") == "sync:job-id"
     assert calls == ["job-id"]
+
+
+def test_rq_job_id_uses_only_rq_safe_characters():
+    from studyai.queueing import rq_job_id
+
+    assert rq_job_id("abc123") == "studyai-abc123"
+
+
+def test_windows_worker_uses_native_waitpid(monkeypatch):
+    from studyai.windows_worker import WindowsSpawnWorker
+
+    worker = object.__new__(WindowsSpawnWorker)
+    worker._horse_pid = 42
+    monkeypatch.setattr("studyai.windows_worker.os.waitpid", lambda pid, options: (pid, 0))
+    assert worker.wait_for_horse() == (42, 0, None)
+
+
+def test_interrupted_resume_preserves_completed_segments(app, client):
+    register_and_login(client)
+    with app.app_context():
+        job_id = create_job(user_id(app), "lecture.mp3", status=QUEUED)
+        database = get_db()
+        database.execute(
+            """UPDATE processing_jobs SET status = 'generating_questions',
+               current_stage = 'generating_questions', completed_segments = 2,
+               total_segments = 3 WHERE id = ?""",
+            (job_id,),
+        )
+        database.commit()
+
+        prepare_interrupted_resume(job_id)
+
+        job = get_job(job_id)
+        assert job["status"] == QUEUED
+        assert job["completed_segments"] == 2
+        assert job["total_segments"] == 3

@@ -22,6 +22,17 @@ FAILED = "failed"
 CANCELLED = "cancelled"
 
 TERMINAL_STATES = frozenset({COMPLETED, FAILED, CANCELLED})
+INTERRUPTIBLE_STATES = frozenset(
+    {
+        QUEUED,
+        PREPARING_MEDIA,
+        SEGMENTING,
+        TRANSCRIBING,
+        ASSEMBLING,
+        SUMMARIZING,
+        GENERATING_QUESTIONS,
+    }
+)
 TRANSITIONS = {
     UPLOADING: {UPLOADED, FAILED, CANCELLED},
     UPLOADED: {QUEUED, FAILED, CANCELLED},
@@ -238,6 +249,20 @@ def prepare_retry(job_id: str) -> None:
         """UPDATE processing_jobs SET error_code = NULL, safe_error_message = NULL,
            completed_at = NULL, updated_at = ? WHERE id = ?""",
         (_utc_now(), job_id),
+    )
+    database.commit()
+
+
+def prepare_interrupted_resume(job_id: str) -> None:
+    """Return an interrupted nonterminal job to the queue without losing segment work."""
+    job = get_job(job_id)
+    if job is None or job["status"] not in INTERRUPTIBLE_STATES:
+        raise InvalidJobTransition("Only interrupted nonterminal jobs can be resumed")
+    database = get_db()
+    database.execute(
+        """UPDATE processing_jobs SET status = ?, current_stage = ?, completed_at = NULL,
+           updated_at = ? WHERE id = ?""",
+        (QUEUED, QUEUED, _utc_now(), job_id),
     )
     database.commit()
 

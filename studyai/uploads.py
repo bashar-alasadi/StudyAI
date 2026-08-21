@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, current_app, g, jsonify, request
 
 from .auth import login_required
-from .jobs import QUEUED, UPLOADED, create_job, get_job_for_upload, transition_job
+from .jobs import QUEUED, UPLOADED, create_job, fail_job, get_job_for_upload, transition_job
 from .queueing import get_job_queue
 from .services.uploads import UploadError, complete_upload, create_upload, get_upload, save_chunk
 
@@ -64,7 +64,14 @@ def finalize_upload(upload_id: str):
         g.user["id"], upload["original_filename"], upload["total_size"], UPLOADED, upload_id
     )
     transition_job(job_id, QUEUED)
-    get_job_queue().enqueue(job_id)
+    try:
+        get_job_queue().enqueue(job_id)
+    except Exception as error:
+        current_app.logger.warning(
+            "queue_enqueue_failed job_id=%s category=%s", job_id, type(error).__name__
+        )
+        fail_job(job_id, "queue_unavailable", "تعذر إرسال المهمة إلى عامل المعالجة.")
+        return jsonify(error="خدمة المعالجة غير متاحة مؤقتًا.", job_id=job_id), 503
     return jsonify(job_id=job_id, status=QUEUED), 202
 
 

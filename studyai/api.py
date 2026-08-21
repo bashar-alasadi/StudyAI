@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from flask import Blueprint, g, jsonify
+from flask import Blueprint, current_app, g, jsonify
 
 from .auth import login_required
-from .jobs import FAILED, get_job, latest_job, prepare_retry
+from .jobs import FAILED, fail_job, get_job, latest_job, prepare_retry
 from .queueing import get_job_queue
 
 api_bp = Blueprint("api", __name__, url_prefix="/api/jobs")
@@ -52,7 +52,14 @@ def retry(job_id: str):
     if job["status"] != FAILED:
         return jsonify(error="يمكن إعادة محاولة المهام الفاشلة فقط."), 409
     prepare_retry(job_id)
-    get_job_queue().enqueue(job_id)
+    try:
+        get_job_queue().enqueue(job_id)
+    except Exception as error:
+        current_app.logger.warning(
+            "queue_retry_failed job_id=%s category=%s", job_id, type(error).__name__
+        )
+        fail_job(job_id, "queue_unavailable", "تعذر إرسال المهمة إلى عامل المعالجة.")
+        return jsonify(error="خدمة المعالجة غير متاحة مؤقتًا."), 503
     return jsonify(job_id=job_id, status="queued"), 202
 
 
