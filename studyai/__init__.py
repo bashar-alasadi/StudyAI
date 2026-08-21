@@ -10,6 +10,7 @@ import click
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 from werkzeug.exceptions import HTTPException
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from . import db
 from .api import api_bp
@@ -26,6 +27,8 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.config.from_mapping(build_config())
     if test_config:
         app.config.update(test_config)
+    if app.config["ENVIRONMENT"] == "production":
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     Path(app.instance_path).mkdir(parents=True, exist_ok=True)
     _validate_config(app)
@@ -127,9 +130,7 @@ def _validate_config(app: Flask) -> None:
     if app.config["TESTING"]:
         return
     secret = app.config.get("SECRET_KEY", "")
-    if app.config["ENVIRONMENT"] == "production" and (
-        not secret or secret == DEVELOPMENT_SECRET
-    ):
+    if app.config["ENVIRONMENT"] == "production" and (not secret or secret == DEVELOPMENT_SECRET):
         raise RuntimeError("SECRET_KEY must be set to a strong value in production")
 
 

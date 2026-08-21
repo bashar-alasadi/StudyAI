@@ -5,8 +5,9 @@
   <form class="auth-card" method="post">
     <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
     <span class="eyebrow">مرحبًا بعودتك</span><h1>تسجيل الدخول</h1>
-    <label>اسم المستخدم<input name="username" autocomplete="username" required maxlength="30" value="{{ request.form.username }}"></label>
+    <label>اسم المستخدم أو البريد الإلكتروني<input name="username" autocomplete="username" required maxlength="254" value="{{ request.form.username }}"></label>
     <label>كلمة المرور<input name="password" type="password" autocomplete="current-password" required maxlength="128"></label>
+    <a class="forgot-link" href="{{ url_for('auth.forgot_password') }}">نسيت كلمة المرور؟</a>
     <button class="button" type="submit">دخول إلى لوحة الدراسة</button>
     <p>ليس لديك حساب؟ <a href="{{ url_for('auth.register') }}">أنشئ حسابًا</a></p>
   </form>

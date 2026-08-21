@@ -1,0 +1,29 @@
+services:
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+
+  studyai:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - redis
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_PATH: /app/instance/studyai.sqlite3
+      UPLOAD_ROOT: /app/instance/uploads
+      PORT: 8000
+    volumes:
+      - studyai-data:/app/instance
+
+volumes:
+  redis-data:
+  studyai-data:

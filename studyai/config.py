@@ -18,6 +18,19 @@ def build_config(environ: Mapping[str, str] | None = None) -> dict[str, object]:
         "SECRET_KEY": env.get("SECRET_KEY", DEVELOPMENT_SECRET),
         "DATABASE": env.get("DATABASE_PATH", str(Path("instance") / "studyai.sqlite3")),
         "GEMINI_API_KEY": env.get("GEMINI_API_KEY", ""),
+        "PASSWORD_RESET_MAX_AGE_SECONDS": _positive_int(
+            env, "PASSWORD_RESET_MAX_AGE_SECONDS", 3600
+        ),
+        "MAIL_DELIVERY_MODE": env.get("MAIL_DELIVERY_MODE", "console").strip().lower(),
+        "MAIL_FROM": env.get("MAIL_FROM", "StudyAI <no-reply@studyai.local>"),
+        "SMTP_HOST": env.get("SMTP_HOST", ""),
+        "SMTP_PORT": _positive_int(env, "SMTP_PORT", 587),
+        "SMTP_USERNAME": env.get("SMTP_USERNAME", ""),
+        "SMTP_PASSWORD": env.get("SMTP_PASSWORD", ""),
+        "SMTP_USE_TLS": env.get("SMTP_USE_TLS", "true").strip().lower()
+        in {"1", "true", "yes", "on"},
+        "SMTP_USE_SSL": env.get("SMTP_USE_SSL", "false").strip().lower()
+        in {"1", "true", "yes", "on"},
         "GEMINI_MODEL": env.get("GEMINI_MODEL", "gemini-3.6-flash"),
         "REDIS_URL": env.get("REDIS_URL", "redis://localhost:6379/0"),
         "RQ_QUEUE": env.get("RQ_QUEUE", "studyai"),
@@ -29,21 +42,13 @@ def build_config(environ: Mapping[str, str] | None = None) -> dict[str, object]:
         "MAX_CONTENT_LENGTH": _positive_int(env, "UPLOAD_CHUNK_MB", 8) * 1024**2 + 1024,
         "MIN_FREE_DISK_MB": _positive_int(env, "MIN_FREE_DISK_MB", 512),
         "STALE_UPLOAD_HOURS": _positive_int(env, "STALE_UPLOAD_HOURS", 24),
-        "FAILED_MEDIA_RETENTION_HOURS": _positive_int(
-            env, "FAILED_MEDIA_RETENTION_HOURS", 168
-        ),
+        "FAILED_MEDIA_RETENTION_HOURS": _positive_int(env, "FAILED_MEDIA_RETENTION_HOURS", 168),
         "FFMPEG_PATH": env.get("FFMPEG_PATH", "ffmpeg"),
         "FFPROBE_PATH": env.get("FFPROBE_PATH", "ffprobe"),
-        "TRANSCRIPTION_SEGMENT_MINUTES": _positive_int(
-            env, "TRANSCRIPTION_SEGMENT_MINUTES", 30
-        ),
-        "TRANSCRIPTION_OVERLAP_SECONDS": _positive_int(
-            env, "TRANSCRIPTION_OVERLAP_SECONDS", 5
-        ),
+        "TRANSCRIPTION_SEGMENT_MINUTES": _positive_int(env, "TRANSCRIPTION_SEGMENT_MINUTES", 30),
+        "TRANSCRIPTION_OVERLAP_SECONDS": _positive_int(env, "TRANSCRIPTION_OVERLAP_SECONDS", 5),
         "SEGMENT_MAX_RETRIES": _positive_int(env, "SEGMENT_MAX_RETRIES", 3),
-        "GEMINI_REQUEST_TIMEOUT_SECONDS": _positive_int(
-            env, "GEMINI_REQUEST_TIMEOUT_SECONDS", 600
-        ),
+        "GEMINI_REQUEST_TIMEOUT_SECONDS": _positive_int(env, "GEMINI_REQUEST_TIMEOUT_SECONDS", 600),
         "GEMINI_FILE_READY_TIMEOUT_SECONDS": _positive_int(
             env, "GEMINI_FILE_READY_TIMEOUT_SECONDS", 120
         ),

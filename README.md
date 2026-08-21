@@ -126,6 +126,59 @@ Open `http://127.0.0.1:5000`. On Linux production, set `APP_ENV=production`, use
 `instance/`, and serve `app:app` with Gunicorn behind a reverse proxy. Run `python worker.py` as a
 separately supervised service. Configure request/body limits to permit one upload chunk, not 5 GB.
 
+## Deploy from GitHub
+
+The repository includes a production `Dockerfile`. The container runs Gunicorn and the RQ worker
+together so both processes share SQLite and uploaded media. Configure the hosting service as follows:
+
+- Build method: Dockerfile (no custom build/start command).
+- Health check: `/health`.
+- Container port: use the platform-provided `PORT`; the default is `8000`.
+- Persistent volume: mount at `/app/instance`. Without it, accounts and jobs are lost on redeploy.
+- Redis: create a private managed Redis service and set its internal URL as `REDIS_URL`.
+- HTTPS: enable the hosting platform's managed HTTPS/proxy.
+
+Required production environment variables:
+
+```dotenv
+APP_ENV=production
+SECRET_KEY=generate-a-long-random-secret
+GEMINI_API_KEY=your-google-ai-api-key
+REDIS_URL=redis://your-private-redis:6379/0
+DATABASE_PATH=/app/instance/studyai.sqlite3
+UPLOAD_ROOT=/app/instance/uploads
+MAIL_DELIVERY_MODE=smtp
+MAIL_FROM=StudyAI <no-reply@your-domain.example>
+SMTP_HOST=your-smtp-host
+SMTP_PORT=587
+SMTP_USERNAME=your-smtp-user
+SMTP_PASSWORD=your-smtp-app-password
+SMTP_USE_TLS=true
+SMTP_USE_SSL=false
+```
+
+The deployment must provide enough persistent disk for the configured `MAX_UPLOAD_GB`. Never expose
+Redis publicly or commit real secrets. `docker compose up --build` reproduces the production topology
+locally when Docker is available.
+
+## Password reset email
+
+Password-reset links expire after one hour and become invalid immediately after the password is changed.
+Local development uses `MAIL_DELIVERY_MODE=console`, which exposes a test link on the reset page.
+For production, configure an SMTP account in `.env`:
+
+```dotenv
+MAIL_DELIVERY_MODE=smtp
+MAIL_FROM=StudyAI <no-reply@example.com>
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USERNAME=no-reply@example.com
+SMTP_PASSWORD=replace-with-an-app-password
+SMTP_USE_TLS=true
+SMTP_USE_SSL=false
+PASSWORD_RESET_MAX_AGE_SECONDS=3600
+```
+
 ## Operations and checks
 
 ```powershell
