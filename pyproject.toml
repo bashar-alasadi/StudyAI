@@ -1,3 +1,19 @@
+[project]
+name = "studyai"
+version = "1.0.0"
+description = "Arabic-first AI study assistant for long lectures"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "Flask>=3.1,<4",
+    "cryptography>=45,<47",
+    "google-genai>=1.30,<2",
+    "python-dotenv>=1.1,<2",
+    "redis>=6,<7",
+    "rq>=2.2,<3",
+    "gunicorn>=23,<24; platform_system != 'Windows'",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q -p no:cacheprovider --basetemp=.test-tmp"
