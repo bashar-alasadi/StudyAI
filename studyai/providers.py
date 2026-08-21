@@ -5,7 +5,6 @@ from __future__ import annotations
 import base64
 import hashlib
 
-from cryptography.fernet import Fernet, InvalidToken
 from flask import current_app, has_app_context
 
 from .db import get_db
@@ -16,6 +15,8 @@ def encrypt_api_key(api_key: str) -> str:
 
 
 def decrypt_api_key(value: str) -> str:
+    from cryptography.fernet import InvalidToken
+
     try:
         return _fernet().decrypt(value.encode("ascii")).decode("utf-8")
     except InvalidToken as error:
@@ -51,7 +52,11 @@ def resolve_ai_config(config) -> dict:
     return resolved
 
 
-def _fernet() -> Fernet:
+def _fernet():
+    # Import lazily so platforms without a compatible cryptography binary can
+    # still start the web application. Encryption is loaded only when needed.
+    from cryptography.fernet import Fernet
+
     secret = str(current_app.config["SECRET_KEY"]).encode("utf-8")
     key = base64.urlsafe_b64encode(hashlib.sha256(secret).digest())
     return Fernet(key)
