@@ -53,10 +53,37 @@ durable source of truth. RQ is smaller than Celery and supplies `SpawnWorker` fo
 - FFmpeg and ffprobe available on `PATH`, or configured by absolute path
 - Gemini API key
 
-Windows: install Redis through Docker Desktop, WSL2, or the officially supported Windows partner, and
-install FFmpeg from a trusted distributor. RQ automatically uses `SpawnWorker` through `worker.py`.
+Windows: install Redis through Docker Desktop, WSL2, or Memurai, the Windows partner linked by Redis, and
+install FFmpeg from a Windows build linked by ffmpeg.org. `worker.py` uses StudyAI's Windows-safe
+`WindowsSpawnWorker`, including orphaned-job recovery after a forced worker stop.
 Linux production: install Redis and FFmpeg from the operating-system package repository; the normal RQ
 worker is selected automatically.
+
+### Verified native Windows development setup
+
+Phase 3 was accepted on Windows 10 x64 without administrator privileges using:
+
+- FFmpeg 9.0.1 essentials from Gyan's build linked by ffmpeg.org, extracted below
+  `$env:LOCALAPPDATA\StudyAI\tools\ffmpeg-verified` after SHA-256 verification.
+- Signed Memurai Developer 4.1.7 executables from the official `MemuraiDeveloper` NuGet package, extracted
+  below `$env:LOCALAPPDATA\StudyAI\tools\memurai-4.1.7`.
+
+Set explicit media paths in each application/worker terminal when FFmpeg is not on `PATH`:
+
+```powershell
+$ffmpegBin = Join-Path $env:LOCALAPPDATA `
+  'StudyAI\tools\ffmpeg-verified\ffmpeg-9.0.1-essentials_build\bin'
+$env:FFMPEG_PATH = Join-Path $ffmpegBin 'ffmpeg.exe'
+$env:FFPROBE_PATH = Join-Path $ffmpegBin 'ffprobe.exe'
+```
+
+The following terminal-bound Memurai command was verified for local development/acceptance. It intentionally
+disables persistence and is not a production service definition:
+
+```powershell
+$memurai = Join-Path $env:LOCALAPPDATA 'StudyAI\tools\memurai-4.1.7\tools\memurai.exe'
+& $memurai --port 6379 --save '""' --appendonly no
+```
 
 ## Setup
 
@@ -108,6 +135,7 @@ python -m compileall -q app.py worker.py studyai tests
 python -m pip check
 python -m pip_audit -r requirements.txt
 python -m scripts.gemini_smoke
+python -m scripts.native_media_smoke --ffmpeg $env:FFMPEG_PATH --ffprobe $env:FFPROBE_PATH
 flask --app app cleanup-storage
 ```
 

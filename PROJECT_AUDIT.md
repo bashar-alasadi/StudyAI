@@ -179,3 +179,119 @@ of google-genai, Redis client, and pytest; they were not blindly upgraded during
 the real Gemini smoke check passed, but the acceptance environment still must demonstrate one native
 FFmpeg/ffprobe conversion and one Redis-backed RQ worker job (including restart/resume). These are deployment
 infrastructure gates, not known source-code failures.
+
+# Phase 3 — Environment & Acceptance Validation
+
+Validation date: 2026-08-21. This section supersedes the Phase 2 merge verdict above.
+
+## Workstation
+
+- OS: Microsoft Windows 10 Pro 10.0.19045, x64.
+- Project runtime: Python 3.12.13 in `.venv`; pip 25.0.1.
+- FFmpeg/ffprobe: 9.0.1 essentials build, SHA-256 matched the distributor value published through the
+  Windows-build link on ffmpeg.org. Installed below per-user LocalAppData.
+- Redis transport: signed Memurai Developer 4.1.7 executables from the official NuGet package; Redis API
+  compatibility 7.2.11. No Windows service or firewall rule was installed.
+- Python queue stack: RQ 2.11.0 and redis-py 6.4.0.
+- Package managers: winget, Chocolatey, Scoop, and Docker were unavailable. WSL was not configured and its
+  feature inspection required elevation, so neither unsupported Redis builds nor unrelated system changes
+  were used.
+
+## Infrastructure
+
+- Native Memurai listened on `127.0.0.1:6379`; native CLI and redis-py both returned `PONG`/`True`.
+- The StudyAI RQ adapter connected to queue `studyai`.
+- `/health` returned 200 and `/health/dependencies` returned 200 with application, SQLite, Redis, FFmpeg, and
+  ffprobe all `true`.
+- The real Flask server and real Redis-backed RQ worker ran concurrently without fork errors after the
+  Windows worker correction described below.
+
+## Defects found and corrected
+
+1. RQ 2.11 rejects `:` in job IDs. `studyai:<id>` prevented real queue delivery. IDs now use the valid,
+   deterministic `studyai-<id>` form, and enqueue failures become persisted, retryable application failures.
+2. The installed RQ `SpawnWorker` still called Unix-only `os.wait4`/process-group APIs and passed multiline
+   child code through native Windows command parsing. `WindowsSpawnWorker` now launches a module entry point,
+   waits with `os.waitpid`, and terminates only its exact child PID.
+3. A killed worker left its RQ execution abandoned while SQLite correctly retained segment progress. Worker
+   startup now cleans registries, identifies only nonterminal jobs with no active RQ execution, returns them
+   to `queued`, and re-enqueues them without deleting completed segments.
+
+Regression tests cover the valid RQ ID, queue-send failure persistence, Windows wait behavior, and preservation
+of completed segment counters during interrupted resume.
+
+## Real Pipeline
+
+- Generated input: non-sensitive 125-second, 16 kHz mono WAV with an Arabic filename; 4,000,078 bytes.
+- Normal HTTP path created a four-chunk upload with 1 MiB chunks. Two chunks were sent, chunk 0 was repeated
+  idempotently, premature finalization returned 409, and the remaining chunks resumed successfully.
+- Flask enqueued the job in Redis; the native Windows RQ worker consumed it.
+- StudyAI invoked native ffprobe, normalized with native FFmpeg, and created three one-minute test segments
+  with five-second overlap. Production's 30-minute default was not changed.
+- All three segments reached Gemini through the RQ worker. Persisted indexes were exactly `[0, 1, 2]`, all
+  completed, with retry count zero for this successful fixture.
+- Final state was `completed`, progress 100, and `completed_segments == total_segments == 3`. Transcript,
+  summary, and questions were non-empty (269, 292, and 1,197 characters respectively).
+- The generated tone contained no speech; Gemini correctly described that fact. No private lecture content was
+  used or recorded.
+
+## Recovery
+
+- The real worker was forcibly stopped after at least two segment transcripts were durable. The database was
+  not modified or corrupted.
+- On restart, RQ moved the abandoned execution to its failed registry; StudyAI re-enqueued the nonterminal job.
+  Worker logs showed no repeated media upload/transcription calls during the resumed run and proceeded from
+  saved segments to token counting, summary, and questions.
+- Browser login and dashboard reload restored 100%, `3 of 3`, and all result tabs. Refresh created no duplicate
+  job; the acceptance user retained exactly one processing job.
+- Browser copy changed to `تم النسخ ✓`; browser warnings/errors were empty.
+- The browser automation file chooser still did not expose a selectable event for the hidden input. Therefore
+  a full chooser-driven browser upload is not claimed; the same real HTTP upload endpoints, Redis worker,
+  browser recovery, tabs, RTL UI, and copy behavior were independently exercised.
+
+## Completeness and full-source generation
+
+- Controlled automated tests prove a missing/empty/failed/out-of-order segment blocks assembly and that adding
+  the missing successful segment permits it.
+- Retry tests prove transient segment failures increment persisted retry state and eventually complete, while
+  exhausted/non-retryable failures do not produce a final transcript.
+- Direct and forced hierarchical tests prove summary and questions consume the full source and that every late
+  group contributes; no arbitrary prefix truncation exists.
+
+## Cleanup
+
+- Successful real processing removed the upload directory containing the assembled source, normalized audio,
+  and segments.
+- The live Gemini smoke script uploaded, generated, and explicitly deleted its provider file successfully.
+- Two controlled failed-job directories were retained initially, aged to eight days, then removed by the real
+  `cleanup-storage` command. Their database audit rows remained and `assembled_path` became null.
+- The native media smoke used an isolated temporary directory, an Arabic filename, real inspection,
+  normalization, and three ordered overlapping segments; its temporary directory was removed on exit.
+
+## Tests
+
+- pytest: 56 passed.
+- Ruff: passed.
+- Python compilation (`app.py`, `worker.py`, `studyai`, `tests`, `scripts`): passed.
+- pip check: no broken requirements.
+- pip-audit against `requirements.txt`: no known vulnerabilities. Cache deserialization warnings were emitted
+  and ignored; the audit completed successfully.
+- Gemini live smoke: passed; response contained 40 characters and remote deletion returned 200.
+
+## Real Gemini
+
+- Standalone minimal media smoke: PASSED.
+- Three-segment pipeline through Flask → Redis → RQ worker → FFmpeg → Gemini → assembly → summary → questions:
+  PASSED, including forced worker interruption and recovery.
+
+## 3+ Hour Test
+
+NOT EXECUTED — no authorized sample
+
+## Final Phase 3 acceptance gates
+
+All mandatory gates were exercised successfully. The inability of this browser harness to automate the native
+file chooser is explicitly scoped above and did not prevent real resumable HTTP upload or browser recovery/UI
+validation.
+
+**SAFE TO MERGE**
