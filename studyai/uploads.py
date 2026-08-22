@@ -8,8 +8,31 @@ from .auth import login_required
 from .jobs import QUEUED, UPLOADED, create_job, fail_job, get_job_for_upload, transition_job
 from .queueing import get_job_queue
 from .services.uploads import UploadError, complete_upload, create_upload, get_upload, save_chunk
+from .services.web_media import WebMediaError, validate_source_url
 
 uploads_bp = Blueprint("uploads", __name__, url_prefix="/api/uploads")
+
+
+@uploads_bp.post("/url")
+@login_required
+def initialize_url_upload():
+    payload = request.get_json(silent=True) or {}
+    try:
+        source_url = validate_source_url(str(payload.get("url", "")))
+    except WebMediaError as error:
+        return jsonify(error=error.public_message), 400
+    job_id = create_job(
+        g.user["id"], "رابط محاضرة", status=QUEUED, source_url=source_url
+    )
+    try:
+        get_job_queue().enqueue(job_id)
+    except Exception as error:
+        current_app.logger.warning(
+            "url_queue_enqueue_failed job_id=%s category=%s", job_id, type(error).__name__
+        )
+        fail_job(job_id, "queue_unavailable", "تعذر إرسال المهمة إلى عامل المعالجة.")
+        return jsonify(error="خدمة المعالجة غير متاحة مؤقتًا.", job_id=job_id), 503
+    return jsonify(job_id=job_id, status=QUEUED), 202
 
 
 @uploads_bp.post("")

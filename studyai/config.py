@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
+from datetime import timedelta
 from pathlib import Path
 
 DEVELOPMENT_SECRET = "development-only-change-me"
@@ -45,9 +46,10 @@ def build_config(environ: Mapping[str, str] | None = None) -> dict[str, object]:
         "MAX_UPLOAD_SIZE_BYTES": _positive_int(env, "MAX_UPLOAD_GB", 5) * 1024**3,
         "UPLOAD_CHUNK_SIZE_BYTES": _positive_int(env, "UPLOAD_CHUNK_MB", 8) * 1024**2,
         "MAX_CONTENT_LENGTH": _positive_int(env, "UPLOAD_CHUNK_MB", 8) * 1024**2 + 1024,
-        "MIN_FREE_DISK_MB": _positive_int(env, "MIN_FREE_DISK_MB", 512),
+        "MIN_FREE_DISK_MB": _positive_int(env, "MIN_FREE_DISK_MB", 64),
         "STALE_UPLOAD_HOURS": _positive_int(env, "STALE_UPLOAD_HOURS", 24),
-        "FAILED_MEDIA_RETENTION_HOURS": _positive_int(env, "FAILED_MEDIA_RETENTION_HOURS", 168),
+        "FAILED_MEDIA_RETENTION_HOURS": _positive_int(env, "FAILED_MEDIA_RETENTION_HOURS", 24),
+        "WEB_DOWNLOAD_TIMEOUT_SECONDS": _positive_int(env, "WEB_DOWNLOAD_TIMEOUT_SECONDS", 30),
         "FFMPEG_PATH": env.get("FFMPEG_PATH", "ffmpeg"),
         "FFPROBE_PATH": env.get("FFPROBE_PATH", "ffprobe"),
         "TRANSCRIPTION_SEGMENT_MINUTES": _positive_int(env, "TRANSCRIPTION_SEGMENT_MINUTES", 30),
@@ -62,6 +64,9 @@ def build_config(environ: Mapping[str, str] | None = None) -> dict[str, object]:
         "SESSION_COOKIE_HTTPONLY": True,
         "SESSION_COOKIE_SAMESITE": "Lax",
         "SESSION_COOKIE_SECURE": environment == "production",
+        "PERMANENT_SESSION_LIFETIME": timedelta(
+            days=_positive_int(env, "SESSION_LIFETIME_DAYS", 30)
+        ),
     }
 
 

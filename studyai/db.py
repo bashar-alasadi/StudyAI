@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS processing_jobs (
     id TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     upload_id TEXT,
+    source_url TEXT,
     status TEXT NOT NULL,
     original_filename TEXT NOT NULL,
     media_type TEXT,
@@ -128,6 +129,11 @@ def init_db() -> None:
         database.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
     if "is_active" not in columns:
         database.execute("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
+    job_columns = {
+        row["name"] for row in database.execute("PRAGMA table_info(processing_jobs)")
+    }
+    if "source_url" not in job_columns:
+        database.execute("ALTER TABLE processing_jobs ADD COLUMN source_url TEXT")
     database.commit()
 
 

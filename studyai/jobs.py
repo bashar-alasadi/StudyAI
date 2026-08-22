@@ -11,6 +11,7 @@ from .db import get_db
 UPLOADING = "uploading"
 UPLOADED = "uploaded"
 QUEUED = "queued"
+DOWNLOADING = "downloading"
 PREPARING_MEDIA = "preparing_media"
 SEGMENTING = "segmenting"
 TRANSCRIBING = "transcribing"
@@ -25,6 +26,7 @@ TERMINAL_STATES = frozenset({COMPLETED, FAILED, CANCELLED})
 INTERRUPTIBLE_STATES = frozenset(
     {
         QUEUED,
+        DOWNLOADING,
         PREPARING_MEDIA,
         SEGMENTING,
         TRANSCRIBING,
@@ -36,7 +38,8 @@ INTERRUPTIBLE_STATES = frozenset(
 TRANSITIONS = {
     UPLOADING: {UPLOADED, FAILED, CANCELLED},
     UPLOADED: {QUEUED, FAILED, CANCELLED},
-    QUEUED: {PREPARING_MEDIA, TRANSCRIBING, FAILED, CANCELLED},
+    QUEUED: {DOWNLOADING, PREPARING_MEDIA, TRANSCRIBING, FAILED, CANCELLED},
+    DOWNLOADING: {PREPARING_MEDIA, FAILED, CANCELLED},
     PREPARING_MEDIA: {SEGMENTING, FAILED, CANCELLED},
     SEGMENTING: {TRANSCRIBING, FAILED, CANCELLED},
     TRANSCRIBING: {ASSEMBLING, FAILED, CANCELLED},
@@ -67,15 +70,16 @@ def create_job(
     size: int = 0,
     status: str = UPLOADING,
     upload_id: str | None = None,
+    source_url: str | None = None,
 ) -> str:
     job_id = uuid.uuid4().hex
     database = get_db()
     database.execute(
         """INSERT INTO processing_jobs
-           (id, user_id, upload_id, status, original_filename, original_size,
+           (id, user_id, upload_id, source_url, status, original_filename, original_size,
             current_stage, progress)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 0)""",
-        (job_id, user_id, upload_id, status, filename, size, status),
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)""",
+        (job_id, user_id, upload_id, source_url, status, filename, size, status),
     )
     database.commit()
     return job_id
@@ -171,6 +175,16 @@ def set_media_metadata(job_id: str, media_type: str, duration_seconds: float) ->
         """UPDATE processing_jobs
            SET media_type = ?, duration_seconds = ?, updated_at = ? WHERE id = ?""",
         (media_type, duration_seconds, _utc_now(), job_id),
+    )
+    database.commit()
+
+
+def attach_upload(job_id: str, upload_id: str, filename: str, size: int) -> None:
+    database = get_db()
+    database.execute(
+        """UPDATE processing_jobs SET upload_id = ?, original_filename = ?,
+           original_size = ?, updated_at = ? WHERE id = ?""",
+        (upload_id, filename, size, _utc_now(), job_id),
     )
     database.commit()
 

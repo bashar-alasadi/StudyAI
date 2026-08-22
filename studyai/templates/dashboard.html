@@ -3,7 +3,7 @@
 {% block content %}
 <section class="dashboard-shell">
   <div class="dashboard-heading">
-    <div><span class="eyebrow">لوحة الدراسة</span><h1>أهلًا، {{ g.user.name }}</h1><p>ارفع المحاضرة مرة، واترك المعالجة تستمر حتى لو أغلقت الصفحة.</p></div>
+    <div><span class="eyebrow">لوحة الدراسة</span><h1>أهلًا، {{ g.user.name }}</h1><p>ارفع المحاضرة أو ألصق رابطها، واترك المعالجة تستمر حتى لو أغلقت الصفحة.</p></div>
     <span class="status-dot">الخدمة جاهزة</span>
   </div>
   <div class="workspace">
@@ -21,6 +21,12 @@
           <small>MP3, M4A, WAV, MP4, WEBM, OGG, FLAC</small><span id="file-name" class="chosen-file"></span>
         </label>
         <button id="upload-button" class="button" type="button">رفع المحاضرة وبدء المعالجة</button>
+        <div class="source-divider"><span>أو</span></div>
+        <div class="url-source">
+          <label for="lecture-url">رابط YouTube أو رابط مباشر لملف صوت/فيديو</label>
+          <div><input id="lecture-url" type="url" dir="ltr" inputmode="url" placeholder="https://youtube.com/watch?v=..."><button id="url-button" class="button" type="button">تلخيص الرابط</button></div>
+          <small>يجب أن يكون الرابط عامًا، ولا تدعم الميزة قوائم التشغيل أو الفيديوهات الخاصة.</small>
+        </div>
         <div id="upload-status" class="status" role="status" aria-live="polite"></div>
       </section>
       <section id="progress-panel" class="panel hidden">

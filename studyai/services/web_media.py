@@ -1,0 +1,143 @@
+"""Safely acquire public web media for the regular lecture pipeline."""
+
+from __future__ import annotations
+
+import ipaddress
+import shutil
+import socket
+import urllib.error
+import urllib.request
+from pathlib import Path
+from urllib.parse import unquote, urlsplit
+
+from flask import current_app
+
+from .uploads import ALLOWED_EXTENSIONS
+
+
+class WebMediaError(RuntimeError):
+    code = "web_media_failed"
+
+    def __init__(self, public_message: str):
+        super().__init__(public_message)
+        self.public_message = public_message
+
+
+def validate_source_url(url: str) -> str:
+    value = url.strip()
+    parsed = urlsplit(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username:
+        raise WebMediaError("أدخل رابطًا عامًا صحيحًا يبدأ بـ http أو https.")
+    if parsed.port and parsed.port not in {80, 443}:
+        raise WebMediaError("منفذ الرابط غير مسموح.")
+    _require_public_host(parsed.hostname)
+    return value
+
+
+def download_web_media(url: str, work_dir: Path) -> tuple[Path, str]:
+    url = validate_source_url(url)
+    work_dir.mkdir(parents=True, exist_ok=True)
+    if _is_youtube(urlsplit(url).hostname or ""):
+        return _download_youtube(url, work_dir)
+    return _download_direct(url, work_dir)
+
+
+def _download_youtube(url: str, work_dir: Path) -> tuple[Path, str]:
+    try:
+        import yt_dlp
+
+        output = str(work_dir / "source.%(ext)s")
+        options = {
+            "format": "bestaudio/best",
+            "outtmpl": output,
+            "noplaylist": True,
+            "quiet": True,
+            "no_warnings": True,
+            "max_filesize": current_app.config["MAX_UPLOAD_SIZE_BYTES"],
+            "socket_timeout": current_app.config["WEB_DOWNLOAD_TIMEOUT_SECONDS"],
+            "retries": 2,
+        }
+        with yt_dlp.YoutubeDL(options) as downloader:
+            info = downloader.extract_info(url, download=True)
+            path = Path(downloader.prepare_filename(info))
+        if not path.is_file():
+            matches = list(work_dir.glob("source.*"))
+            path = matches[0] if len(matches) == 1 else path
+        _check_download(path)
+        title = str(info.get("title") or "youtube-lecture")[:220]
+        return path, f"{title}{path.suffix.lower()}"
+    except WebMediaError:
+        raise
+    except Exception as error:
+        raise WebMediaError("تعذر تنزيل فيديو YouTube. تحقق من الرابط وإتاحة الفيديو.") from error
+
+
+def _download_direct(url: str, work_dir: Path) -> tuple[Path, str]:
+    parsed = urlsplit(url)
+    suffix = Path(unquote(parsed.path)).suffix.lower()
+    if suffix.lstrip(".") not in ALLOWED_EXTENSIONS:
+        raise WebMediaError("الرابط المباشر يجب أن ينتهي بصيغة صوت أو فيديو مدعومة.")
+    destination = work_dir / f"source{suffix}"
+    maximum = current_app.config["MAX_UPLOAD_SIZE_BYTES"]
+    request = urllib.request.Request(url, headers={"User-Agent": "StudyAI/1.0"})
+    try:
+        with _safe_opener().open(
+            request, timeout=current_app.config["WEB_DOWNLOAD_TIMEOUT_SECONDS"]
+        ) as response, destination.open("wb") as target:
+            declared = int(response.headers.get("Content-Length", "0") or 0)
+            if declared > maximum:
+                raise WebMediaError("حجم الملف في الرابط يتجاوز الحد المسموح.")
+            written = 0
+            while chunk := response.read(1024 * 1024):
+                written += len(chunk)
+                if written > maximum:
+                    raise WebMediaError("حجم الملف في الرابط يتجاوز الحد المسموح.")
+                target.write(chunk)
+        _check_download(destination)
+        return destination, Path(unquote(parsed.path)).name[:255]
+    except WebMediaError:
+        destination.unlink(missing_ok=True)
+        raise
+    except (OSError, urllib.error.URLError) as error:
+        destination.unlink(missing_ok=True)
+        raise WebMediaError("تعذر تنزيل ملف الوسائط من الرابط.") from error
+
+
+class _PublicRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        validate_source_url(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _safe_opener():
+    return urllib.request.build_opener(_PublicRedirectHandler())
+
+
+def _require_public_host(hostname: str) -> None:
+    try:
+        addresses = {item[4][0] for item in socket.getaddrinfo(hostname, None)}
+    except socket.gaierror as error:
+        raise WebMediaError("تعذر الوصول إلى عنوان الرابط.") from error
+    if not addresses or any(not ipaddress.ip_address(address).is_global for address in addresses):
+        raise WebMediaError("لا يُسمح بروابط الشبكات المحلية أو الخاصة.")
+
+
+def _is_youtube(hostname: str) -> bool:
+    host = hostname.rstrip(".").lower()
+    return host == "youtu.be" or host == "youtube.com" or host.endswith(".youtube.com")
+
+
+def _check_download(path: Path) -> None:
+    maximum = current_app.config["MAX_UPLOAD_SIZE_BYTES"]
+    if not path.is_file() or path.stat().st_size <= 0:
+        raise WebMediaError("لم يحتوِ الرابط على ملف وسائط صالح.")
+    if path.stat().st_size > maximum:
+        path.unlink(missing_ok=True)
+        raise WebMediaError("حجم الملف في الرابط يتجاوز الحد المسموح.")
+    if path.suffix.lower().lstrip(".") not in ALLOWED_EXTENSIONS:
+        path.unlink(missing_ok=True)
+        raise WebMediaError("صيغة الوسائط في الرابط غير مدعومة.")
+
+
+def cleanup_download_dir(path: Path) -> None:
+    shutil.rmtree(path, ignore_errors=True)

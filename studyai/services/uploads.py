@@ -61,6 +61,35 @@ def get_upload(upload_id: str, user_id: int | None = None):
     return get_db().execute(query, parameters).fetchone()
 
 
+def register_downloaded_file(user_id: int, source: Path, filename: str):
+    """Move an already bounded download into the normal completed-upload lifecycle."""
+    size = source.stat().st_size
+    extension = source.suffix.lower().lstrip(".")
+    if extension not in ALLOWED_EXTENSIONS:
+        raise UploadError("صيغة الوسائط في الرابط غير مدعومة.", 415)
+    if size <= 0 or size > current_app.config["MAX_UPLOAD_SIZE_BYTES"]:
+        raise UploadError("حجم الملف في الرابط يتجاوز الحد المسموح.", 413)
+    upload_id = uuid.uuid4().hex
+    destination_dir = upload_dir(upload_id)
+    destination_dir.mkdir(parents=True, exist_ok=False)
+    destination = destination_dir / f"source.{extension}"
+    try:
+        shutil.move(str(source), destination)
+        database = get_db()
+        database.execute(
+            """INSERT INTO upload_sessions
+               (id, user_id, original_filename, extension, total_size, chunk_size,
+                expected_chunks, received_chunks, status, assembled_path, completed_at)
+               VALUES (?, ?, ?, ?, ?, ?, 1, 1, 'completed', ?, CURRENT_TIMESTAMP)""",
+            (upload_id, user_id, filename[:255], extension, size, size, str(destination)),
+        )
+        database.commit()
+    except Exception:
+        shutil.rmtree(destination_dir, ignore_errors=True)
+        raise
+    return get_upload(upload_id, user_id)
+
+
 def save_chunk(upload_id: str, user_id: int, index: int, stream):
     upload = get_upload(upload_id, user_id)
     if upload is None:
@@ -129,14 +158,21 @@ def complete_upload(upload_id: str, user_id: int) -> Path:
         raise UploadError("لم تصل جميع أجزاء الملف بعد.", 409)
     if sum(row["size"] for row in rows) != upload["total_size"]:
         raise UploadError("الحجم النهائي لا يطابق الحجم المتوقع.", 409)
-    _ensure_disk_space(upload["total_size"])
     assembled = upload_dir(upload_id) / f"source.{upload['extension']}"
     temporary = assembled.with_suffix(f".{upload['extension']}.part")
     try:
-        with temporary.open("wb") as output:
-            for index in indexes:
-                with chunk_path(upload_id, index).open("rb") as source:
+        completed_chunks = _completed_prefix(rows, temporary)
+        with temporary.open("ab") as output:
+            for index in indexes[completed_chunks:]:
+                source_path = chunk_path(upload_id, index)
+                if not source_path.is_file():
+                    raise UploadError("أحد أجزاء الملف مفقود؛ أعد رفع المحاضرة.", 409)
+                _ensure_disk_space(min(rows[index]["size"], upload["chunk_size"]))
+                with source_path.open("rb") as source:
                     shutil.copyfileobj(source, output, 1024 * 1024)
+                output.flush()
+                os.fsync(output.fileno())
+                source_path.unlink()
         if temporary.stat().st_size != upload["total_size"]:
             raise UploadError("فشل التحقق من الملف المجمّع.", 500)
         os.replace(temporary, assembled)
@@ -151,8 +187,27 @@ def complete_upload(upload_id: str, user_id: int) -> Path:
         database.execute("DELETE FROM upload_chunks WHERE upload_id = ?", (upload_id,))
         database.commit()
         return assembled
-    finally:
-        temporary.unlink(missing_ok=True)
+    except Exception:
+        # Keep the verified partial assembly so finalization can resume without
+        # needing a second full copy of the lecture.
+        raise
+
+
+def _completed_prefix(rows, temporary: Path) -> int:
+    """Return the number of whole chunks already committed to a partial assembly."""
+    current_size = temporary.stat().st_size if temporary.exists() else 0
+    cumulative = 0
+    if current_size == 0:
+        return 0
+    for position, row in enumerate(rows, start=1):
+        cumulative += row["size"]
+        if current_size == cumulative:
+            return position
+        if current_size < cumulative:
+            temporary.unlink(missing_ok=True)
+            raise UploadError("تعذر استئناف تجميع الملف؛ حاول رفعه مرة أخرى.", 409)
+    temporary.unlink(missing_ok=True)
+    raise UploadError("حجم الملف الجزئي غير صالح؛ حاول رفعه مرة أخرى.", 409)
 
 
 def cleanup_stale_uploads(max_age_hours: int = 24) -> int:
@@ -169,7 +224,7 @@ def cleanup_stale_uploads(max_age_hours: int = 24) -> int:
     return len(stale)
 
 
-def cleanup_expired_job_media(max_age_hours: int = 168) -> int:
+def cleanup_expired_job_media(max_age_hours: int = 24) -> int:
     """Remove retained media for terminal jobs without deleting their audit records."""
     database = get_db()
     expired = database.execute(

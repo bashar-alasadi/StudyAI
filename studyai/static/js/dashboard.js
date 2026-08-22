@@ -2,12 +2,13 @@
   "use strict";
   const csrf = document.querySelector('meta[name="csrf-token"]').content;
   const elements = Object.fromEntries([
-    "audio-file", "drop-zone", "file-name", "upload-button", "upload-status",
+    "audio-file", "drop-zone", "file-name", "upload-button", "lecture-url", "url-button", "upload-status",
     "progress-panel", "progress-percent", "progress-bar", "stage-message",
     "segment-progress", "retry-button", "results-panel", "result-content", "copy-button",
   ].map(id => [id, document.getElementById(id)]));
   const stageMessages = {
     uploading: "جارٍ رفع المحاضرة…", uploaded: "اكتمل الرفع.", queued: "المهمة في انتظار العامل…",
+    downloading: "جارٍ تنزيل محتوى الرابط…",
     preparing_media: "جارٍ فحص الملف واستخراج الصوت…", segmenting: "جارٍ تقسيم المحاضرة…",
     transcribing: "جارٍ تفريغ أجزاء المحاضرة كاملة…", assembling: "جارٍ تجميع النص الكامل…",
     summarizing: "جارٍ إنشاء ملخص يغطي المحاضرة كاملة…",
@@ -33,6 +34,10 @@
     }
   });
   elements["upload-button"].addEventListener("click", startUpload);
+  elements["url-button"].addEventListener("click", startUrlImport);
+  elements["lecture-url"].addEventListener("keydown", event => {
+    if (event.key === "Enter") startUrlImport();
+  });
   elements["retry-button"].addEventListener("click", retryJob);
   elements["copy-button"].addEventListener("click", async () => {
     await navigator.clipboard.writeText(results[selectedResult] || "");
@@ -75,6 +80,27 @@
       showUploadStatus(error.message, true);
     } finally {
       setButtonLoading(false);
+    }
+  }
+
+  async function startUrlImport() {
+    const url = elements["lecture-url"].value.trim();
+    if (!url) return showUploadStatus("ألصق رابط المحاضرة أولًا.", true);
+    setUrlLoading(true);
+    showUploadStatus("جارٍ إضافة الرابط…");
+    try {
+      const queued = await request("/api/uploads/url", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      currentJobId = queued.job_id;
+      elements["progress-panel"].classList.remove("hidden");
+      activateStep("progress-panel");
+      await pollJob();
+    } catch (error) {
+      showUploadStatus(error.message, true);
+    } finally {
+      setUrlLoading(false);
     }
   }
 
@@ -141,6 +167,7 @@
   function chooseFile(file) { if (file) elements["file-name"].textContent = `${file.name} — ${formatBytes(file.size)}`; }
   function showUploadStatus(message, error = false) { elements["upload-status"].textContent = message; elements["upload-status"].classList.toggle("error", error); }
   function setButtonLoading(loading) { elements["upload-button"].disabled = loading; elements["upload-button"].textContent = loading ? "جارٍ الرفع…" : "رفع المحاضرة وبدء المعالجة"; }
+  function setUrlLoading(loading) { elements["url-button"].disabled = loading; elements["url-button"].textContent = loading ? "جارٍ الإضافة…" : "تلخيص الرابط"; }
   function activateStep(target) { document.querySelectorAll(".step").forEach(step => step.classList.toggle("active", step.dataset.target === target)); }
   function formatBytes(bytes) { if (!bytes) return "0 B"; const units = ["B", "KB", "MB", "GB"]; const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), 3); return `${(bytes / 1024 ** index).toFixed(index ? 1 : 0)} ${units[index]}`; }
   reconnectLatest();

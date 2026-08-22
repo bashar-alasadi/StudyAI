@@ -66,6 +66,45 @@ def test_resumable_upload_and_idempotent_completion(app, client):
         ).fetchone()[0] == 0
 
 
+def test_assembly_resumes_after_disk_pressure_without_second_full_copy(
+    app, client, monkeypatch
+):
+    register_and_login(client)
+    upload = initialize(client, total_size=8, chunk_size=4).get_json()
+    upload_id = upload["upload_id"]
+    assert put_chunk(client, upload_id, 0, b"abcd").status_code == 200
+    assert put_chunk(client, upload_id, 1, b"efgh").status_code == 200
+
+    calls = 0
+
+    def interrupt_after_first_chunk(_additional_bytes):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            from studyai.services.uploads import UploadError
+
+            raise UploadError("لا توجد مساحة تخزين كافية لإكمال الرفع.", 507)
+
+    monkeypatch.setattr("studyai.services.uploads._ensure_disk_space", interrupt_after_first_chunk)
+    failed = client.post(
+        f"/api/uploads/{upload_id}/complete", headers={"X-CSRF-Token": csrf(client)}
+    )
+    assert failed.status_code == 507
+    with app.app_context():
+        directory = upload_dir(upload_id)
+        assert (directory / "source.mp3.part").read_bytes() == b"abcd"
+        assert not (directory / "chunk-00000000").exists()
+
+    monkeypatch.setattr("studyai.services.uploads._ensure_disk_space", lambda _size: None)
+    completed = client.post(
+        f"/api/uploads/{upload_id}/complete", headers={"X-CSRF-Token": csrf(client)}
+    )
+    assert completed.status_code == 202
+    with app.app_context():
+        directory = upload_dir(upload_id)
+        assert (directory / "source.mp3").read_bytes() == b"abcdefgh"
+
+
 def test_upload_rejects_invalid_inputs(client):
     register_and_login(client)
     assert initialize(client, "notes.txt").status_code == 415

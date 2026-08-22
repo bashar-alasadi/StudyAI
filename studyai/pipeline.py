@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import shutil
+import tempfile
 import time
 from contextlib import nullcontext
 from pathlib import Path
@@ -14,12 +15,14 @@ from .content import ContentGenerationError, generate_full_questions, generate_f
 from .jobs import (
     ASSEMBLING,
     COMPLETED,
+    DOWNLOADING,
     GENERATING_QUESTIONS,
     PREPARING_MEDIA,
     SEGMENTING,
     SUMMARIZING,
     TRANSCRIBING,
     JobProgress,
+    attach_upload,
     complete_segment,
     create_segments,
     fail_job,
@@ -33,7 +36,8 @@ from .jobs import (
 )
 from .services.ai import AIService, AIServiceError
 from .services.media import MediaError, MediaService, SegmentFile
-from .services.uploads import get_upload, upload_dir
+from .services.uploads import get_upload, register_downloaded_file, upload_dir
+from .services.web_media import WebMediaError, cleanup_download_dir, download_web_media
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +80,12 @@ def process_pipeline(job_id: str, *, sleeper=time.sleep) -> None:
         _cleanup_success(job_id)
         logger.info("lecture_job_completed job_id=%s", job_id)
     except (
-        MediaError, AIServiceError, CompletenessError, ContentGenerationError, OSError
+        MediaError,
+        AIServiceError,
+        CompletenessError,
+        ContentGenerationError,
+        WebMediaError,
+        OSError,
     ) as error:
         code = getattr(error, "code", "pipeline_failed")
         public = getattr(error, "public_message", "تعذرت معالجة المحاضرة كاملة.")
@@ -86,6 +95,18 @@ def process_pipeline(job_id: str, *, sleeper=time.sleep) -> None:
 
 def _prepare_media(job_id: str, media: MediaService) -> list[SegmentFile]:
     job = get_job(job_id)
+    if not job["upload_id"] and job["source_url"]:
+        transition_job(job_id, DOWNLOADING, JobProgress(DOWNLOADING, 2))
+        download_root = Path(current_app.config["UPLOAD_ROOT"]).resolve()
+        download_root.mkdir(parents=True, exist_ok=True)
+        temporary = Path(tempfile.mkdtemp(prefix="web-", dir=download_root))
+        try:
+            path, filename = download_web_media(job["source_url"], temporary)
+            upload = register_downloaded_file(job["user_id"], path, filename)
+            attach_upload(job_id, upload["id"], filename, upload["total_size"])
+            job = get_job(job_id)
+        finally:
+            cleanup_download_dir(temporary)
     upload = get_upload(job["upload_id"])
     if upload is None or not upload["assembled_path"]:
         raise MediaError("Completed upload is missing")

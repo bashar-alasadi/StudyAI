@@ -119,6 +119,7 @@ def login():
             flash("هذا الحساب موقوف. تواصل مع إدارة الموقع.", "error")
         else:
             session.clear()
+            session.permanent = True
             session["user_id"] = user["id"]
             session["csrf_token"] = secrets.token_urlsafe(32)
             return redirect(url_for("auth.dashboard"))

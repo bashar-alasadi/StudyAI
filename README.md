@@ -36,6 +36,8 @@ durable source of truth. RQ is smaller than Celery and supplies `SpawnWorker` fo
 
 - Browser lifetime and processing lifetime are independent.
 - Uploads use server-generated 128-bit IDs and configurable chunks (8 MB by default).
+- Public YouTube links and direct audio/video URLs can enter the same transcription,
+  summary, and question pipeline. Playlists, private videos, and private-network URLs are rejected.
 - Duplicate identical chunks are idempotent; conflicting duplicates are rejected.
 - The default maximum lecture upload is 5 GB with disk-space reserve checks.
 - Video is converted to speech-focused lossless FLAC rather than sent to Gemini as video.
@@ -104,7 +106,9 @@ Important settings:
 | `REDIS_URL` | `redis://localhost:6379/0` | Queue connection |
 | `MAX_UPLOAD_GB` | `5` | Maximum complete lecture size |
 | `UPLOAD_CHUNK_MB` | `8` | Independent browser chunk size |
-| `MIN_FREE_DISK_MB` | `512` | Reserved free disk space |
+| `MIN_FREE_DISK_MB` | `64` | Reserved free disk space after each assembly step |
+| `WEB_DOWNLOAD_TIMEOUT_SECONDS` | `30` | Timeout for each web-media network request |
+| `SESSION_LIFETIME_DAYS` | `30` | Signed-in session lifetime |
 | `TRANSCRIPTION_SEGMENT_MINUTES` | `30` | Retry/recovery unit |
 | `TRANSCRIPTION_OVERLAP_SECONDS` | `5` | Boundary speech protection |
 | `SEGMENT_MAX_RETRIES` | `3` | Attempts per segment |
