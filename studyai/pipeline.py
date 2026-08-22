@@ -110,6 +110,8 @@ def _prepare_media(job_id: str, media: MediaService) -> list[SegmentFile]:
     upload = get_upload(job["upload_id"])
     if upload is None or not upload["assembled_path"]:
         raise MediaError("Completed upload is missing")
+    if current_app.config["DIRECT_MEDIA_PROCESSING"]:
+        return _prepare_direct_media(job_id, upload)
     work_dir = upload_dir(upload["id"]) / "work"
     normalized = work_dir / "normalized.flac"
     segment_dir = work_dir / "segments"
@@ -135,6 +137,22 @@ def _prepare_media(job_id: str, media: MediaService) -> list[SegmentFile]:
     )
     create_segments(job_id, segments)
     return segments
+
+
+def _prepare_direct_media(job_id: str, upload) -> list[SegmentFile]:
+    """Send one complete supported media file to Gemini without FFmpeg."""
+    source = Path(upload["assembled_path"])
+    if not source.is_file() or source.stat().st_size <= 0:
+        raise MediaError("Completed upload is missing")
+    if get_segments(job_id):
+        return [SegmentFile(0, source, 0, 1)]
+    transition_job(job_id, PREPARING_MEDIA, JobProgress(PREPARING_MEDIA, 5))
+    media_type = "video" if upload["extension"] in {"mp4", "mpeg", "webm"} else "audio"
+    set_media_metadata(job_id, media_type, 1)
+    transition_job(job_id, SEGMENTING, JobProgress(SEGMENTING, 12))
+    segment = SegmentFile(0, source, 0, 1)
+    create_segments(job_id, [segment])
+    return [segment]
 
 
 def _transcribe_all(job_id: str, files: list[SegmentFile], ai, sleeper) -> None:

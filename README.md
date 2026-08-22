@@ -109,6 +109,7 @@ Important settings:
 | `MIN_FREE_DISK_MB` | `64` | Reserved free disk space after each assembly step |
 | `WEB_DOWNLOAD_TIMEOUT_SECONDS` | `30` | Timeout for each web-media network request |
 | `SESSION_LIFETIME_DAYS` | `30` | Signed-in session lifetime |
+| `DIRECT_MEDIA_PROCESSING` | `false` | Send complete media directly to Gemini when FFmpeg is unavailable |
 | `TRANSCRIPTION_SEGMENT_MINUTES` | `30` | Retry/recovery unit |
 | `TRANSCRIPTION_OVERLAP_SECONDS` | `5` | Boundary speech protection |
 | `SEGMENT_MAX_RETRIES` | `3` | Attempts per segment |

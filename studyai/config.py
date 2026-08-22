@@ -41,6 +41,7 @@ def build_config(environ: Mapping[str, str] | None = None) -> dict[str, object]:
         "REDIS_URL": env.get("REDIS_URL", "redis://localhost:6379/0"),
         "RQ_QUEUE": env.get("RQ_QUEUE", "studyai"),
         "JOB_QUEUE_MODE": env.get("JOB_QUEUE_MODE", "rq"),
+        "DIRECT_MEDIA_PROCESSING": _boolean(env, "DIRECT_MEDIA_PROCESSING", False),
         "JOB_TIMEOUT_SECONDS": _positive_int(env, "JOB_TIMEOUT_SECONDS", 21600),
         "UPLOAD_ROOT": env.get("UPLOAD_ROOT", str(Path("instance") / "uploads")),
         "MAX_UPLOAD_SIZE_BYTES": _positive_int(env, "MAX_UPLOAD_GB", 5) * 1024**3,
@@ -79,3 +80,15 @@ def _positive_int(env: Mapping[str, str], name: str, default: int) -> int:
     if value <= 0:
         raise RuntimeError(f"{name} must be greater than zero")
     return value
+
+
+def _boolean(env: Mapping[str, str], name: str, default: bool) -> bool:
+    raw_value = env.get(name)
+    if raw_value is None:
+        return default
+    normalized = raw_value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise RuntimeError(f"{name} must be a boolean")

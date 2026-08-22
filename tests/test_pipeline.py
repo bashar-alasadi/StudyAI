@@ -106,6 +106,37 @@ def test_full_multisegment_pipeline_completes_and_cleans_up(app, client):
         assert not storage.exists()
 
 
+def test_direct_media_pipeline_needs_no_ffmpeg(app, client):
+    job_id = make_queued_job(app, client)
+
+    class DirectAI:
+        def transcribe_path(self, path):
+            assert path.name == "source.mp4"
+            return "نص المحاضرة الكامل من الملف المباشر"
+
+        def count_tokens(self, text):
+            return len(text)
+
+        def summarize(self, text):
+            return "ملخص مباشر"
+
+        def generate_questions(self, text):
+            return "أسئلة مباشرة"
+
+    app.config.update(
+        DIRECT_MEDIA_PROCESSING=True,
+        AI_SERVICE_FACTORY=DirectAI,
+        FFMPEG_PATH="missing-ffmpeg",
+        FFPROBE_PATH="missing-ffprobe",
+    )
+    with app.app_context():
+        process_pipeline(job_id, sleeper=lambda _seconds: None)
+        job = get_job(job_id)
+        assert job["status"] == "completed"
+        assert job["completed_segments"] == job["total_segments"] == 1
+        assert job["summary"] == "ملخص مباشر"
+
+
 def test_segment_retry_does_not_repeat_successful_segments(app, client):
     job_id = make_queued_job(app, client)
     ai = FakePipelineAI({1: 1})

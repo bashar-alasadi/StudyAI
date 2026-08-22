@@ -70,8 +70,11 @@ def create_app(test_config: dict | None = None) -> Flask:
             )
         except Exception:
             pass
-        ffmpeg_ok = _command_available(app.config["FFMPEG_PATH"])
-        ffprobe_ok = _command_available(app.config["FFPROBE_PATH"])
+        direct_media = app.config["DIRECT_MEDIA_PROCESSING"]
+        local_queue = app.config["JOB_QUEUE_MODE"] in {"thread", "sync"}
+        ffmpeg_ok = direct_media or _command_available(app.config["FFMPEG_PATH"])
+        ffprobe_ok = direct_media or _command_available(app.config["FFPROBE_PATH"])
+        redis_ok = local_queue or redis_ok
         payload = {
             "application": True,
             "database": True,
