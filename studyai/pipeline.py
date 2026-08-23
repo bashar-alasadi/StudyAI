@@ -139,7 +139,13 @@ def _prepare_media(job_id: str, media: MediaService) -> list[SegmentFile]:
                 try:
                     return _prepare_caption_segments(job_id, job["source_url"], temporary)
                 except WebMediaError:
-                    raise download_error
+                    logger.warning("captions blocked; sending YouTube URL directly to AI")
+                    try:
+                        return _prepare_ai_youtube_segment(
+                            job_id, job["source_url"], temporary
+                        )
+                    except AIServiceError:
+                        raise download_error
             upload = register_downloaded_file(job["user_id"], path, filename)
             attach_upload(job_id, upload["id"], filename, upload["total_size"])
             job = get_job(job_id)
@@ -190,6 +196,20 @@ def _prepare_caption_segments(job_id: str, url: str, work_dir: Path) -> list[Seg
     for index, (_start, _end, text) in enumerate(chunks):
         complete_segment(job_id, index, text)
     return files
+
+
+def _prepare_ai_youtube_segment(job_id: str, url: str, work_dir: Path) -> list[SegmentFile]:
+    transition_job(job_id, PREPARING_MEDIA, JobProgress(PREPARING_MEDIA, 5))
+    transition_job(job_id, SEGMENTING, JobProgress(SEGMENTING, 12))
+    file = SegmentFile(0, work_dir / "youtube-url.txt", 0, 1)
+    create_segments(job_id, [file])
+    ai = _ai_service()
+    manager = ai if hasattr(ai, "__enter__") else nullcontext(ai)
+    with manager as managed_ai:
+        transcript = managed_ai.transcribe_youtube_url(url)
+    complete_segment(job_id, 0, transcript)
+    set_media_metadata(job_id, "youtube_url", 1)
+    return [file]
 
 
 def _prepare_direct_media(job_id: str, upload) -> list[SegmentFile]:

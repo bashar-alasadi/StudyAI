@@ -105,6 +105,24 @@ class AIService:
                         "Gemini remote file cleanup failed: %s", type(cleanup_error).__name__
                     )
 
+    def transcribe_youtube_url(self, url: str) -> str:
+        """Ask Gemini to read a public YouTube video without downloading it on our host."""
+        try:
+            from google.genai import types
+
+            video = types.Part(file_data=types.FileData(file_uri=url))
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=[video, TRANSCRIPTION_PROMPT],
+            )
+            return self._response_text(response)
+        except AIServiceError:
+            raise
+        except Exception as error:
+            raise self._classify(
+                error, "تعذر على خدمة الذكاء الاصطناعي قراءة فيديو YouTube الآن."
+            ) from error
+
     def transcribe(self, stream, extension: str) -> str:
         """Compatibility path for the Phase 1 endpoint; chunked jobs use transcribe_path."""
         temporary_path = None
