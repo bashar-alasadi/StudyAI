@@ -64,7 +64,7 @@
       if (!upload) {
         upload = await request("/api/uploads", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ filename: file.name, total_size: file.size }),
+          body: JSON.stringify({ filename: file.name, total_size: file.size, mime_type: file.type || "" }),
         });
         localStorage.setItem(uploadStorageKey, JSON.stringify({
           upload_id: upload.upload_id, name: file.name, size: file.size,

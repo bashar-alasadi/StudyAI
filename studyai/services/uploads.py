@@ -13,7 +13,26 @@ from flask import current_app
 
 from ..db import get_db
 
-ALLOWED_EXTENSIONS = {"mp3", "mp4", "mpeg", "mpga", "m4a", "wav", "webm", "ogg", "flac"}
+ALLOWED_EXTENSIONS = {
+    "mp3", "mp4", "mpeg", "mpga", "m4a", "wav", "webm", "ogg", "oga", "flac",
+    "aac", "opus", "3gp", "3gpp",
+}
+MIME_EXTENSIONS = {
+    "audio/mpeg": "mp3",
+    "audio/mp4": "m4a",
+    "audio/x-m4a": "m4a",
+    "audio/wav": "wav",
+    "audio/x-wav": "wav",
+    "audio/webm": "webm",
+    "audio/ogg": "ogg",
+    "application/ogg": "ogg",
+    "audio/opus": "opus",
+    "audio/aac": "aac",
+    "audio/flac": "flac",
+    "video/mp4": "mp4",
+    "video/webm": "webm",
+    "video/3gpp": "3gp",
+}
 
 
 class UploadError(ValueError):
@@ -22,10 +41,22 @@ class UploadError(ValueError):
         self.status_code = status_code
 
 
-def create_upload(user_id: int, filename: str, total_size: int, requested_chunk_size: int | None):
-    extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+def create_upload(
+    user_id: int,
+    filename: str,
+    total_size: int,
+    requested_chunk_size: int | None,
+    mime_type: str = "",
+):
+    clean_name = Path(filename.strip()).name
+    extension = clean_name.rsplit(".", 1)[-1].lower() if "." in clean_name else ""
     if extension not in ALLOWED_EXTENSIONS:
-        raise UploadError("صيغة الملف غير مدعومة.", 415)
+        extension = MIME_EXTENSIONS.get(mime_type.lower().split(";", 1)[0].strip(), "")
+    if extension not in ALLOWED_EXTENSIONS:
+        raise UploadError(
+            "صيغة الملف غير مدعومة. استخدم MP3 أو M4A أو WAV أو OGG أو OPUS أو AAC أو 3GP.",
+            415,
+        )
     maximum = current_app.config["MAX_UPLOAD_SIZE_BYTES"]
     if total_size <= 0:
         raise UploadError("الملف فارغ.")
@@ -46,7 +77,7 @@ def create_upload(user_id: int, filename: str, total_size: int, requested_chunk_
         """INSERT INTO upload_sessions
            (id, user_id, original_filename, extension, total_size, chunk_size,
             expected_chunks, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'uploading')""",
-        (upload_id, user_id, filename[:255], extension, total_size, chunk_size, expected_chunks),
+        (upload_id, user_id, clean_name[:255], extension, total_size, chunk_size, expected_chunks),
     )
     database.commit()
     return get_upload(upload_id, user_id)

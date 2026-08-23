@@ -46,6 +46,7 @@ def initialize_upload():
             str(payload.get("filename", "")),
             int(payload.get("total_size", 0)),
             int(payload["chunk_size"]) if payload.get("chunk_size") else None,
+            str(payload.get("mime_type", "")),
         )
     except (UploadError, TypeError, ValueError) as error:
         status = error.status_code if isinstance(error, UploadError) else 400

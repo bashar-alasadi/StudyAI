@@ -128,6 +128,27 @@ def test_upload_rejects_invalid_inputs(client):
     assert put_chunk(client, upload_id, 9, b"data").status_code == 400
 
 
+def test_android_and_telegram_audio_formats_are_accepted(client):
+    register_and_login(client)
+    for filename in ("voice.opus", "recording.aac", "lecture.3gp", "telegram.oga"):
+        assert initialize(client, filename, total_size=4, chunk_size=4).status_code == 201
+
+
+def test_android_content_uri_filename_uses_reported_audio_mime(client):
+    register_and_login(client)
+    response = client.post(
+        "/api/uploads",
+        json={
+            "filename": "recording",
+            "total_size": 4,
+            "chunk_size": 4,
+            "mime_type": "audio/ogg",
+        },
+        headers={"X-CSRF-Token": csrf(client)},
+    )
+    assert response.status_code == 201
+
+
 def test_conflicting_duplicate_chunk_is_rejected(client):
     register_and_login(client)
     upload_id = initialize(client).get_json()["upload_id"]
