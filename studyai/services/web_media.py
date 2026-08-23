@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import re
 import shutil
 import socket
 import urllib.error
@@ -124,6 +125,39 @@ def fetch_youtube_transcript(url: str, segment_seconds: int = 1200):
         raise WebMediaError(
             "حظر YouTube التنزيل من الخادم، ولا يتوفر لهذا الفيديو نص بديل قابل للمعالجة."
         ) from error
+
+
+def fetch_youtube_duration(url: str) -> float:
+    """Read duration metadata from the public watch page without downloading media."""
+    video_id = _youtube_video_id(url)
+    if not video_id:
+        raise WebMediaError("تعذر تحديد معرّف فيديو YouTube من الرابط.")
+    request = urllib.request.Request(
+        f"https://www.youtube.com/watch?v={video_id}",
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 Chrome/140 Safari/537.36"
+            ),
+            "Accept-Language": "ar,en;q=0.8",
+        },
+    )
+    try:
+        with _safe_opener().open(
+            request, timeout=current_app.config["WEB_DOWNLOAD_TIMEOUT_SECONDS"]
+        ) as response:
+            page = response.read(3 * 1024 * 1024)
+        match = re.search(rb'"lengthSeconds":"(\d+)"', page)
+        if not match:
+            raise WebMediaError("تعذر قراءة مدة فيديو YouTube.")
+        duration = float(match.group(1))
+        if not 0 < duration <= 24 * 3600:
+            raise WebMediaError("مدة فيديو YouTube خارج النطاق المدعوم.")
+        return duration
+    except WebMediaError:
+        raise
+    except (OSError, urllib.error.URLError) as error:
+        raise WebMediaError("تعذر قراءة مدة فيديو YouTube.") from error
 
 
 def _youtube_video_id(url: str) -> str | None:

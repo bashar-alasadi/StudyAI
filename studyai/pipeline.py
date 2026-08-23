@@ -46,6 +46,7 @@ from .services.web_media import (
     WebMediaError,
     cleanup_download_dir,
     download_web_media,
+    fetch_youtube_duration,
     fetch_youtube_transcript,
 )
 
@@ -207,16 +208,27 @@ def _prepare_ai_youtube_segment(job_id: str, url: str, work_dir: Path) -> list[S
     manager = ai if hasattr(ai, "__enter__") else nullcontext(ai)
     with manager as managed_ai:
         job = get_job(job_id)
+        duration_seconds = float(job["duration_seconds"] or 0) or None
+        if duration_seconds is None:
+            try:
+                duration_seconds = fetch_youtube_duration(url)
+                logger.info(
+                    "youtube_duration_detected job_id=%s duration=%s",
+                    job_id,
+                    duration_seconds,
+                )
+            except WebMediaError:
+                logger.warning("youtube_duration_detection_failed job_id=%s", job_id)
         transcript = managed_ai.transcribe_youtube_url(
             url,
-            duration_seconds=float(job["duration_seconds"] or 0) or None,
+            duration_seconds=duration_seconds,
             progress_callback=lambda completed, total: update_progress(
                 job_id,
                 JobProgress(SEGMENTING, 12 + int(55 * completed / total), completed, total),
             ),
         )
     complete_segment(job_id, 0, transcript)
-    set_media_metadata(job_id, "youtube_url", float(job["duration_seconds"] or 1))
+    set_media_metadata(job_id, "youtube_url", duration_seconds or 1)
     return [file]
 
 
