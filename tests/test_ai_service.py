@@ -143,6 +143,20 @@ def test_youtube_end_marker_is_removed_and_stops_extra_clip():
     assert AIService._parse_youtube_clip_result("[NO_MEDIA]") == ("", True)
 
 
+def test_internal_error_after_successful_youtube_clips_is_recognized_as_end():
+    error = AIServiceError(
+        "ServerError: 500 INTERNAL server error",
+        "تعذر قراءة الفيديو.",
+        retryable=True,
+        code="provider_transient",
+    )
+    assert AIService._looks_like_youtube_end_failure(error) is True
+    quota = AIServiceError(
+        "429 RESOURCE_EXHAUSTED", "نفدت الحصة.", retryable=True, code="provider_quota"
+    )
+    assert AIService._looks_like_youtube_end_failure(quota) is False
+
+
 def test_openai_provider_transcribes_and_generates(tmp_path):
     class Transcriptions:
         def create(self, **_kwargs):

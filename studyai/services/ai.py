@@ -139,12 +139,18 @@ class AIService:
             try:
                 text = self._generate_youtube_clip(video, prompt)
             except Exception as error:
+                classified = self._classify(
+                    error, "تعذر على خدمة الذكاء الاصطناعي قراءة فيديو YouTube الآن."
+                )
+                if transcripts and self._looks_like_youtube_end_failure(classified):
+                    logger.info(
+                        "Gemini rejected clip after media end index=%s start=%s", index, start
+                    )
+                    break
                 logger.exception(
                     "Gemini YouTube clip failed index=%s start=%s end=%s", index, start, end
                 )
-                raise self._classify(
-                    error, "تعذر على خدمة الذكاء الاصطناعي قراءة فيديو YouTube الآن."
-                ) from error
+                raise classified from error
             text, reached_end = self._parse_youtube_clip_result(text)
             if not text:
                 break
@@ -166,6 +172,11 @@ class AIService:
             return "", True
         reached_end = "[END_OF_VIDEO]" in cleaned
         return cleaned.replace("[END_OF_VIDEO]", "").strip(), reached_end
+
+    @staticmethod
+    def _looks_like_youtube_end_failure(error: AIServiceError) -> bool:
+        message = str(error).upper()
+        return error.code == "provider_transient" and "500" in message and "INTERNAL" in message
 
     def _generate_youtube_clip(self, video, prompt: str) -> str:
         return self._generate_text_with_fallback(
