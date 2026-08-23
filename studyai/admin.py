@@ -117,8 +117,8 @@ def create_provider():
     provider_type = request.form.get("provider_type", "").strip().lower()
     model = request.form.get("model", "").strip()
     api_key = request.form.get("api_key", "").strip()
-    if not name or provider_type != "gemini" or not model or not api_key:
-        flash("أكمل بيانات مزوّد Gemini بشكل صحيح.", "error")
+    if not name or provider_type not in {"gemini", "openai"} or not model or not api_key:
+        flash("أكمل بيانات مزوّد الذكاء الاصطناعي بشكل صحيح.", "error")
         return redirect(url_for("admin.providers"))
     database = get_db()
     database.execute(

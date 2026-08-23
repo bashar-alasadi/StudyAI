@@ -78,7 +78,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         payload = {
             "application": True,
             "database": True,
-            "ai": bool(app.config["GEMINI_API_KEY"]),
+            "ai": bool(app.config["GEMINI_API_KEY"] or app.config["OPENAI_API_KEY"]),
             "redis": redis_ok,
             "ffmpeg": ffmpeg_ok,
             "ffprobe": ffprobe_ok,

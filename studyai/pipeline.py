@@ -134,7 +134,7 @@ def _prepare_media(job_id: str, media: MediaService) -> list[SegmentFile]:
         try:
             try:
                 path, filename = download_web_media(job["source_url"], temporary)
-            except WebMediaError as download_error:
+            except WebMediaError:
                 logger.warning("media download blocked; trying complete YouTube captions")
                 try:
                     return _prepare_caption_segments(job_id, job["source_url"], temporary)
@@ -145,7 +145,7 @@ def _prepare_media(job_id: str, media: MediaService) -> list[SegmentFile]:
                             job_id, job["source_url"], temporary
                         )
                     except AIServiceError:
-                        raise download_error
+                        raise
             upload = register_downloaded_file(job["user_id"], path, filename)
             attach_upload(job_id, upload["id"], filename, upload["total_size"])
             job = get_job(job_id)
@@ -203,10 +203,16 @@ def _prepare_ai_youtube_segment(job_id: str, url: str, work_dir: Path) -> list[S
     transition_job(job_id, SEGMENTING, JobProgress(SEGMENTING, 12))
     file = SegmentFile(0, work_dir / "youtube-url.txt", 0, 1)
     create_segments(job_id, [file])
-    ai = _ai_service()
+    ai = AIService.from_config(current_app.config, resolve_provider=False)
     manager = ai if hasattr(ai, "__enter__") else nullcontext(ai)
     with manager as managed_ai:
-        transcript = managed_ai.transcribe_youtube_url(url)
+        transcript = managed_ai.transcribe_youtube_url(
+            url,
+            progress_callback=lambda completed, total: update_progress(
+                job_id,
+                JobProgress(SEGMENTING, 12 + int(55 * completed / total), completed, total),
+            ),
+        )
     complete_segment(job_id, 0, transcript)
     set_media_metadata(job_id, "youtube_url", 1)
     return [file]

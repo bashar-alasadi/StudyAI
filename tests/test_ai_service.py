@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from studyai.services.ai import AIService, AIServiceError
+from studyai.services.ai import AIService, AIServiceError, OpenAIService
 
 
 class FilesAPI:
@@ -97,3 +97,25 @@ def test_token_count_and_generation():
     assert service.count_tokens("محاضرة") == 123
     assert service.summarize("محاضرة كاملة") == "نص كامل"
     assert service.generate_questions("محاضرة كاملة") == "نص كامل"
+
+
+def test_openai_provider_transcribes_and_generates(tmp_path):
+    class Transcriptions:
+        def create(self, **_kwargs):
+            return SimpleNamespace(text="تفريغ OpenAI كامل")
+
+    class Responses:
+        def create(self, **_kwargs):
+            return SimpleNamespace(output_text="نتيجة OpenAI")
+
+    client = SimpleNamespace(
+        audio=SimpleNamespace(transcriptions=Transcriptions()),
+        responses=Responses(),
+        close=lambda: None,
+    )
+    path = tmp_path / "lecture.mp3"
+    path.write_bytes(b"audio")
+    service = OpenAIService(client, "gpt-test", "gpt-transcribe")
+    assert service.transcribe_path(path) == "تفريغ OpenAI كامل"
+    assert service.summarize("نص") == "نتيجة OpenAI"
+    assert service.generate_questions("نص") == "نتيجة OpenAI"

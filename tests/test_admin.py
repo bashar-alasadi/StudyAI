@@ -96,3 +96,33 @@ def test_admin_cannot_remove_own_access(app, client):
             "SELECT is_admin FROM users WHERE id = ?", (user_id,)
         ).fetchone()
         assert row[0] == 0
+
+
+def test_admin_can_add_and_select_openai_provider(app, client):
+    register_and_login(client)
+    make_admin(app)
+    response = client.post(
+        "/admin/providers",
+        data={
+            "csrf_token": csrf(client),
+            "name": "OpenAI الرئيسي",
+            "provider_type": "openai",
+            "model": "gpt-test",
+            "api_key": "openai-secret-key",
+        },
+    )
+    assert response.status_code == 302
+    from studyai.db import get_db
+    from studyai.providers import resolve_ai_config
+    with app.app_context():
+        provider = get_db().execute(
+            "SELECT * FROM ai_providers WHERE provider_type = 'openai'"
+        ).fetchone()
+        client.post(
+            f"/admin/providers/{provider['id']}/activate",
+            data={"csrf_token": csrf(client)},
+        )
+        resolved = resolve_ai_config(app.config)
+        assert resolved["AI_PROVIDER"] == "openai"
+        assert resolved["OPENAI_API_KEY"] == "openai-secret-key"
+        assert resolved["OPENAI_MODEL"] == "gpt-test"

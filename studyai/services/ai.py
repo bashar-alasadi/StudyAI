@@ -44,10 +44,12 @@ class AIService:
         self.sleeper = sleeper
 
     @classmethod
-    def from_config(cls, config):
+    def from_config(cls, config, *, resolve_provider: bool = True):
         from ..providers import resolve_ai_config
 
-        config = resolve_ai_config(config)
+        config = resolve_ai_config(config) if resolve_provider else dict(config)
+        if resolve_provider and config.get("AI_PROVIDER") == "openai":
+            return OpenAIService.from_config(config)
         api_key = config.get("GEMINI_API_KEY")
         if not api_key:
             raise AIServiceError(
@@ -105,12 +107,12 @@ class AIService:
                         "Gemini remote file cleanup failed: %s", type(cleanup_error).__name__
                     )
 
-    def transcribe_youtube_url(self, url: str) -> str:
+    def transcribe_youtube_url(self, url: str, progress_callback=None) -> str:
         """Read long public videos in bounded clips, then return the complete transcript."""
         from google.genai import types
 
-        clip_seconds = 30 * 60
-        maximum_clips = 16  # Gemini free-tier YouTube ceiling is eight hours per day.
+        clip_seconds = 90 * 60
+        maximum_clips = 6  # Covers public videos up to the free-tier eight-hour ceiling.
         transcripts: list[str] = []
         for index in range(maximum_clips):
             start = index * clip_seconds
@@ -127,10 +129,7 @@ class AIService:
                 + TRANSCRIPTION_PROMPT
             )
             try:
-                response = self.client.models.generate_content(
-                    model=self.model, contents=[video, prompt]
-                )
-                text = self._response_text(response)
+                text = self._generate_youtube_clip(video, prompt)
             except Exception as error:
                 logger.exception(
                     "Gemini YouTube clip failed index=%s start=%s end=%s", index, start, end
@@ -141,11 +140,30 @@ class AIService:
             if text.strip() == "[NO_MEDIA]":
                 break
             transcripts.append(f"[المقطع {index + 1}]\n{text.strip()}")
+            if progress_callback:
+                progress_callback(index + 1, maximum_clips)
         if not transcripts:
             raise AIServiceError(
                 "YouTube URL returned no media", "لم يُرجع فيديو YouTube محتوى قابلًا للتفريغ."
             )
         return "\n\n".join(transcripts)
+
+    def _generate_youtube_clip(self, video, prompt: str) -> str:
+        models = list(dict.fromkeys((self.model, "gemini-2.5-flash", "gemini-2.5-flash-lite")))
+        last_error = None
+        for model in models:
+            try:
+                response = self.client.models.generate_content(
+                    model=model, contents=[video, prompt]
+                )
+                return self._response_text(response)
+            except Exception as error:
+                last_error = error
+                classified = self._classify(error, "تعذر قراءة فيديو YouTube.")
+                if not classified.retryable:
+                    raise
+                logger.warning("Gemini model unavailable model=%s; trying fallback", model)
+        raise last_error
 
     def transcribe(self, stream, extension: str) -> str:
         """Compatibility path for the Phase 1 endpoint; chunked jobs use transcribe_path."""
@@ -260,3 +278,88 @@ QUESTIONS_PROMPT = """أنشئ أسئلة مراجعة عربية متنوعة �
 EXPLANATION_PROMPT = """أنشئ دليلًا دراسيًا عربيًا يشرح جميع المفاهيم المهمة في المحتوى بوضوح
 وتدرج. أضف أمثلة توضيحية جديدة عند فائدتها، لكن ضع أمام كل مثال جديد عبارة [مثال توضيحي مضاف]
 حتى لا يختلط بكلام المحاضر. لا تغيّر حقائق المحاضرة، واذكر عند الحاجة أن المثال للتوضيح فقط."""
+
+
+class OpenAIService:
+    """OpenAI provider implementing the same pipeline interface as Gemini."""
+
+    def __init__(self, client, model: str, transcription_model: str):
+        self.client = client
+        self.model = model
+        self.transcription_model = transcription_model
+
+    @classmethod
+    def from_config(cls, config):
+        api_key = config.get("OPENAI_API_KEY")
+        if not api_key:
+            raise AIServiceError(
+                "OPENAI_API_KEY is missing", "مفتاح OpenAI API غير مضاف في لوحة الإدارة.",
+                503, code="missing_api_key",
+            )
+        try:
+            from openai import OpenAI
+        except ImportError as error:
+            raise AIServiceError(
+                str(error), "مكتبة OpenAI غير متاحة.", 503, code="sdk_missing"
+            ) from error
+        return cls(
+            OpenAI(api_key=api_key, timeout=config["GEMINI_REQUEST_TIMEOUT_SECONDS"]),
+            config["OPENAI_MODEL"],
+            config["OPENAI_TRANSCRIPTION_MODEL"],
+        )
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc_info):
+        self.close()
+
+    def close(self):
+        self.client.close()
+
+    def transcribe_path(self, path: Path) -> str:
+        try:
+            with path.open("rb") as audio:
+                response = self.client.audio.transcriptions.create(
+                    model=self.transcription_model, file=audio,
+                    prompt="تفريغ دقيق وكامل مع الحفاظ على لغة المتحدث وترتيب الكلام.",
+                )
+            text = (getattr(response, "text", None) or "").strip()
+            if not text:
+                raise AIServiceError("Empty OpenAI transcript", "لم يرجع OpenAI نصًا.")
+            return text
+        except AIServiceError:
+            raise
+        except Exception as error:
+            raise AIService._classify(error, "تعذر تفريغ الملف عبر OpenAI.") from error
+
+    def transcribe_youtube_url(self, _url: str, progress_callback=None) -> str:
+        raise AIServiceError(
+            "OpenAI does not accept YouTube video URLs",
+            "معالجة رابط YouTube المباشر تحتاج Gemini؛ استخدم OpenAI بعد تنزيل الملف.",
+            code="youtube_not_supported",
+        )
+
+    def count_tokens(self, text: str) -> int:
+        return max(1, len(text) // 4)
+
+    def summarize(self, text: str) -> str:
+        return self._generate(f"{SUMMARY_PROMPT}\n\nنص المحاضرة:\n{text}")
+
+    def generate_questions(self, text: str) -> str:
+        return self._generate(f"{QUESTIONS_PROMPT}\n\nنص المحاضرة:\n{text}")
+
+    def explain_with_examples(self, text: str) -> str:
+        return self._generate(f"{EXPLANATION_PROMPT}\n\nمحتوى المحاضرة:\n{text}")
+
+    def _generate(self, prompt: str) -> str:
+        try:
+            response = self.client.responses.create(model=self.model, input=prompt)
+            text = (response.output_text or "").strip()
+            if not text:
+                raise AIServiceError("Empty OpenAI response", "لم يرجع OpenAI نتيجة.")
+            return text
+        except AIServiceError:
+            raise
+        except Exception as error:
+            raise AIService._classify(error, "تعذر إكمال الطلب عبر OpenAI.") from error

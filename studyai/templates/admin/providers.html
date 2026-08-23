@@ -2,11 +2,11 @@
 {% block admin_title %}مزوّدو الذكاء الاصطناعي{% endblock %}
 {% block admin_content %}
 <div class="admin-heading"><div><span class="eyebrow">AI</span><h1>مزوّدو الذكاء الاصطناعي</h1><p>المزوّد النشط يُستخدم تلقائيًا في الطلبات الجديدة.</p></div></div>
-<section class="admin-card provider-form"><h2>إضافة مزوّد Gemini</h2><form method="post" action="{{ url_for('admin.create_provider') }}">
+<section class="admin-card provider-form"><h2>إضافة مزوّد ذكاء اصطناعي</h2><form method="post" action="{{ url_for('admin.create_provider') }}">
   <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
   <label>اسم تعريفي<input name="name" required maxlength="80" placeholder="Gemini الرئيسي"></label>
-  <label>نوع المزوّد<select name="provider_type"><option value="gemini">Google Gemini</option></select></label>
-  <label>النموذج<input name="model" required maxlength="120" placeholder="gemini-2.5-flash"></label>
+  <label>نوع المزوّد<select name="provider_type"><option value="gemini">Google Gemini</option><option value="openai">OpenAI / ChatGPT</option></select></label>
+  <label>النموذج<input name="model" required maxlength="120" placeholder="gemini-3.6-flash أو gpt-5.6-luna"></label>
   <label>مفتاح API<input name="api_key" type="password" required autocomplete="new-password"><small>يُشفّر قبل تخزينه ولن يظهر مرة أخرى.</small></label>
   <button class="button">حفظ المزوّد</button>
 </form></section>

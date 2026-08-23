@@ -46,9 +46,14 @@ def resolve_ai_config(config) -> dict:
     if not has_app_context():
         return resolved
     provider = active_provider()
-    if provider and provider["provider_type"] == "gemini":
-        resolved["GEMINI_API_KEY"] = provider["api_key"]
-        resolved["GEMINI_MODEL"] = provider["model"]
+    if provider:
+        resolved["AI_PROVIDER"] = provider["provider_type"]
+        if provider["provider_type"] == "gemini":
+            resolved["GEMINI_API_KEY"] = provider["api_key"]
+            resolved["GEMINI_MODEL"] = provider["model"]
+        elif provider["provider_type"] == "openai":
+            resolved["OPENAI_API_KEY"] = provider["api_key"]
+            resolved["OPENAI_MODEL"] = provider["model"]
     return resolved
 
 

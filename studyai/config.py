@@ -19,6 +19,8 @@ def build_config(environ: Mapping[str, str] | None = None) -> dict[str, object]:
         "SECRET_KEY": env.get("SECRET_KEY", DEVELOPMENT_SECRET),
         "DATABASE": env.get("DATABASE_PATH", str(Path("instance") / "studyai.sqlite3")),
         "GEMINI_API_KEY": env.get("GEMINI_API_KEY", ""),
+        "OPENAI_API_KEY": env.get("OPENAI_API_KEY", ""),
+        "AI_PROVIDER": env.get("AI_PROVIDER", "gemini").strip().lower(),
         "PASSWORD_RESET_MAX_AGE_SECONDS": _positive_int(
             env, "PASSWORD_RESET_MAX_AGE_SECONDS", 3600
         ),
@@ -41,6 +43,10 @@ def build_config(environ: Mapping[str, str] | None = None) -> dict[str, object]:
         "ADMIN_PASSWORD": env.get("ADMIN_PASSWORD", ""),
         "ADMIN_PASSWORD_HASH": env.get("ADMIN_PASSWORD_HASH", ""),
         "GEMINI_MODEL": env.get("GEMINI_MODEL", "gemini-3.6-flash"),
+        "OPENAI_MODEL": env.get("OPENAI_MODEL", "gpt-5.6-luna"),
+        "OPENAI_TRANSCRIPTION_MODEL": env.get(
+            "OPENAI_TRANSCRIPTION_MODEL", "gpt-transcribe"
+        ),
         "REDIS_URL": env.get("REDIS_URL", "redis://localhost:6379/0"),
         "RQ_QUEUE": env.get("RQ_QUEUE", "studyai"),
         "JOB_QUEUE_MODE": env.get("JOB_QUEUE_MODE", "rq"),
