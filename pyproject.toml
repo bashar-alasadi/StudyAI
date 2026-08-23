@@ -12,6 +12,7 @@ dependencies = [
     "redis>=6,<7",
     "rq>=2.2,<3",
     "yt-dlp>=2026.8.19",
+    "youtube-transcript-api>=1.2,<2",
     "gunicorn>=23,<24; platform_system != 'Windows'",
 ]
 

@@ -4,7 +4,13 @@ import pytest
 from conftest import csrf, register_and_login
 
 from studyai.db import get_db
-from studyai.services.web_media import WebMediaError, validate_source_url
+from studyai.services.web_media import WebMediaError, _youtube_video_id, validate_source_url
+
+
+def test_youtube_video_id_supports_common_public_urls():
+    assert _youtube_video_id("https://youtu.be/abc123?si=x") == "abc123"
+    assert _youtube_video_id("https://www.youtube.com/watch?v=abc123") == "abc123"
+    assert _youtube_video_id("https://youtube.com/live/abc123") == "abc123"
 
 
 def test_url_submission_creates_owned_queued_job(client, monkeypatch):

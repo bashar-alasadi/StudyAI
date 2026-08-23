@@ -9,7 +9,7 @@ import socket
 import urllib.error
 import urllib.request
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from flask import current_app
 
@@ -82,6 +82,62 @@ def _download_youtube(url: str, work_dir: Path) -> tuple[Path, str]:
     except Exception as error:
         logger.exception("YouTube download failed: %s", type(error).__name__)
         raise WebMediaError("تعذر تنزيل فيديو YouTube. تحقق من الرابط وإتاحة الفيديو.") from error
+
+
+def fetch_youtube_transcript(url: str, segment_seconds: int = 1200):
+    """Return complete caption chunks when a hosting IP is blocked by YouTube media."""
+    video_id = _youtube_video_id(url)
+    if not video_id:
+        raise WebMediaError("تعذر تحديد معرّف فيديو YouTube من الرابط.")
+    try:
+        from youtube_transcript_api import YouTubeTranscriptApi
+
+        transcript_list = YouTubeTranscriptApi().list(video_id)
+        try:
+            transcript = transcript_list.find_manually_created_transcript(["ar", "en"])
+        except Exception:
+            transcript = transcript_list.find_generated_transcript(["ar", "en"])
+        entries = list(transcript.fetch())
+        if not entries:
+            raise WebMediaError("لا يحتوي فيديو YouTube على نص أو ترجمة متاحة.")
+        chunks: list[tuple[float, float, str]] = []
+        current: list[str] = []
+        start = float(entries[0].start)
+        end = start
+        for entry in entries:
+            entry_start = float(entry.start)
+            entry_end = entry_start + float(entry.duration)
+            if current and entry_start - start >= segment_seconds:
+                chunks.append((start, end, " ".join(current).strip()))
+                current, start = [], entry_start
+            text = str(entry.text).replace("\n", " ").strip()
+            if text:
+                current.append(text)
+            end = entry_end
+        if current:
+            chunks.append((start, end, " ".join(current).strip()))
+        return chunks, end
+    except WebMediaError:
+        raise
+    except Exception as error:
+        logger.exception("YouTube transcript fallback failed: %s", type(error).__name__)
+        raise WebMediaError(
+            "حظر YouTube التنزيل من الخادم، ولا يتوفر لهذا الفيديو نص بديل قابل للمعالجة."
+        ) from error
+
+
+def _youtube_video_id(url: str) -> str | None:
+    parsed = urlsplit(url)
+    host = (parsed.hostname or "").lower()
+    if host == "youtu.be":
+        return parsed.path.strip("/").split("/")[0] or None
+    if _is_youtube(host):
+        if parsed.path == "/watch":
+            return parse_qs(parsed.query).get("v", [None])[0]
+        parts = [part for part in parsed.path.split("/") if part]
+        if len(parts) >= 2 and parts[0] in {"embed", "shorts", "live"}:
+            return parts[1]
+    return None
 
 
 def _download_direct(url: str, work_dir: Path) -> tuple[Path, str]:

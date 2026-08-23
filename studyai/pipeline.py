@@ -42,7 +42,12 @@ from .jobs import (
 from .services.ai import AIService, AIServiceError
 from .services.media import MediaError, MediaService, SegmentFile
 from .services.uploads import get_upload, register_downloaded_file, upload_dir
-from .services.web_media import WebMediaError, cleanup_download_dir, download_web_media
+from .services.web_media import (
+    WebMediaError,
+    cleanup_download_dir,
+    download_web_media,
+    fetch_youtube_transcript,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +132,14 @@ def _prepare_media(job_id: str, media: MediaService) -> list[SegmentFile]:
         download_root.mkdir(parents=True, exist_ok=True)
         temporary = Path(tempfile.mkdtemp(prefix="web-", dir=download_root))
         try:
-            path, filename = download_web_media(job["source_url"], temporary)
+            try:
+                path, filename = download_web_media(job["source_url"], temporary)
+            except WebMediaError as download_error:
+                logger.warning("media download blocked; trying complete YouTube captions")
+                try:
+                    return _prepare_caption_segments(job_id, job["source_url"], temporary)
+                except WebMediaError:
+                    raise download_error
             upload = register_downloaded_file(job["user_id"], path, filename)
             attach_upload(job_id, upload["id"], filename, upload["total_size"])
             job = get_job(job_id)
@@ -163,6 +175,21 @@ def _prepare_media(job_id: str, media: MediaService) -> list[SegmentFile]:
     )
     create_segments(job_id, segments)
     return segments
+
+
+def _prepare_caption_segments(job_id: str, url: str, work_dir: Path) -> list[SegmentFile]:
+    chunks, duration = fetch_youtube_transcript(url)
+    transition_job(job_id, PREPARING_MEDIA, JobProgress(PREPARING_MEDIA, 5))
+    set_media_metadata(job_id, "youtube_captions", duration)
+    transition_job(job_id, SEGMENTING, JobProgress(SEGMENTING, 12))
+    files = [
+        SegmentFile(index, work_dir / f"caption-{index:05d}.txt", start, end)
+        for index, (start, end, _text) in enumerate(chunks)
+    ]
+    create_segments(job_id, files)
+    for index, (_start, _end, text) in enumerate(chunks):
+        complete_segment(job_id, index, text)
+    return files
 
 
 def _prepare_direct_media(job_id: str, upload) -> list[SegmentFile]:
