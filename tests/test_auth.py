@@ -5,6 +5,8 @@ def test_students_use_dashboard_without_account(client):
     response = client.get("/dashboard")
     assert response.status_code == 200
     assert "لا تحتاج إلى تسجيل" in response.text
+    assert "دخول الإدارة" not in response.text
+    assert "/admin/login" not in response.text
 
 
 def test_registration_is_removed(client):
