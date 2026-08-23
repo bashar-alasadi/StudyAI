@@ -50,6 +50,7 @@ def result(job_id: str):
         transcript=job["transcript"],
         summary=job["summary"],
         questions=job["questions"],
+        explanation=job["explanation"],
     )
 
 

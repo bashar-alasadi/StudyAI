@@ -76,15 +76,26 @@ class FakePipelineAI:
         assert "بداية المحاضرة" in text and "خاتمة المحاضرة" in text
         return "أسئلة شاملة"
 
+    def explain_with_examples(self, text):
+        assert "بداية المحاضرة" in text and "خاتمة المحاضرة" in text
+        return "شرح شامل\n[مثال توضيحي مضاف] مثال جديد"
 
-def make_queued_job(app, client):
+
+def make_queued_job(app, client, *, include_explanations=False):
     register_and_login(client)
     with app.app_context():
         owner = get_db().execute("SELECT id FROM users WHERE username='__public__'").fetchone()[0]
         upload = create_upload(owner, "lecture.mp4", 4, 4)
         save_chunk(upload["id"], owner, 0, io.BytesIO(b"data"))
         complete_upload(upload["id"], owner)
-        job_id = create_job(owner, "lecture.mp4", 4, UPLOADED, upload["id"])
+        job_id = create_job(
+            owner,
+            "lecture.mp4",
+            4,
+            UPLOADED,
+            upload["id"],
+            include_explanations=include_explanations,
+        )
         transition_job(job_id, QUEUED)
         return job_id
 
@@ -135,6 +146,17 @@ def test_direct_media_pipeline_needs_no_ffmpeg(app, client):
         assert job["status"] == "completed"
         assert job["completed_segments"] == job["total_segments"] == 1
         assert job["summary"] == "ملخص مباشر"
+
+
+def test_optional_explanation_and_examples_are_saved(app, client):
+    job_id = make_queued_job(app, client, include_explanations=True)
+    ai = FakePipelineAI()
+    app.config.update(MEDIA_SERVICE_FACTORY=FakeMedia, AI_SERVICE_FACTORY=lambda: ai)
+    with app.app_context():
+        process_pipeline(job_id, sleeper=lambda _seconds: None)
+        explanation = get_job(job_id)["explanation"]
+        assert "شرح شامل" in explanation
+        assert "[مثال توضيحي مضاف]" in explanation
 
 
 def test_segment_retry_does_not_repeat_successful_segments(app, client):

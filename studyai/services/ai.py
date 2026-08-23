@@ -130,6 +130,9 @@ class AIService:
     def generate_questions(self, text: str) -> str:
         return self._generate(f"{QUESTIONS_PROMPT}\n\nنص المحاضرة:\n{text}")
 
+    def explain_with_examples(self, text: str) -> str:
+        return self._generate(f"{EXPLANATION_PROMPT}\n\nمحتوى المحاضرة:\n{text}")
+
     def count_tokens(self, text: str) -> int:
         try:
             response = self.client.models.count_tokens(model=self.model, contents=text)
@@ -212,3 +215,6 @@ SUMMARY_PROMPT = """لخّص المحاضرة بالعربية في عناوين
 والتعريفات المهمة، ولا تضف معلومات غير موجودة في النص."""
 QUESTIONS_PROMPT = """أنشئ أسئلة مراجعة عربية متنوعة من المحاضرة، ثم ضع الإجابات في قسم منفصل.
 لا تستخدم معلومات خارج النص."""
+EXPLANATION_PROMPT = """أنشئ دليلًا دراسيًا عربيًا يشرح جميع المفاهيم المهمة في المحتوى بوضوح
+وتدرج. أضف أمثلة توضيحية جديدة عند فائدتها، لكن ضع أمام كل مثال جديد عبارة [مثال توضيحي مضاف]
+حتى لا يختلط بكلام المحاضر. لا تغيّر حقائق المحاضرة، واذكر عند الحاجة أن المثال للتوضيح فقط."""

@@ -16,12 +16,14 @@ uploads_bp = Blueprint("uploads", __name__, url_prefix="/api/uploads")
 @uploads_bp.post("/url")
 def initialize_url_upload():
     payload = request.get_json(silent=True) or {}
+    include_explanations = bool(payload.get("include_explanations", False))
     try:
         source_url = validate_source_url(str(payload.get("url", "")))
     except WebMediaError as error:
         return jsonify(error=error.public_message), 400
     job_id = create_job(
-        public_user_id(), "رابط محاضرة", status=QUEUED, source_url=source_url
+        public_user_id(), "رابط محاضرة", status=QUEUED, source_url=source_url,
+        include_explanations=include_explanations,
     )
     remember_resource("job", job_id)
     try:
@@ -89,7 +91,8 @@ def finalize_upload(upload_id: str):
         remember_resource("job", existing_job["id"])
         return jsonify(job_id=existing_job["id"], status=existing_job["status"]), 202
     job_id = create_job(
-        owner_id, upload["original_filename"], upload["total_size"], UPLOADED, upload_id
+        owner_id, upload["original_filename"], upload["total_size"], UPLOADED, upload_id,
+        include_explanations=bool(request.args.get("include_explanations") == "1"),
     )
     transition_job(job_id, QUEUED)
     remember_resource("job", job_id)

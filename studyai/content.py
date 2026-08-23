@@ -37,6 +37,21 @@ def generate_full_questions(ai, transcript: str, segment_texts: list[str], budge
     )
 
 
+def generate_explanation_with_examples(
+    ai, transcript: str, segment_texts: list[str], budget: int
+) -> str:
+    """Explain every major concept and add clearly labelled illustrative examples."""
+    if ai.count_tokens(transcript) <= budget:
+        return ai.explain_with_examples(transcript)
+    groups = _group_complete_sources(ai, segment_texts, max(1, budget // 2))
+    notes = [
+        ai.summarize(_label_group(group, index, len(groups), "قسم من المحاضرة"))
+        for index, group in enumerate(groups, 1)
+    ]
+    reduced = _reduce(ai, notes, budget, "ملاحظات تغطي المحاضرة", ai.summarize)
+    return ai.explain_with_examples(reduced)
+
+
 def _reduce(ai, items: list[str], budget: int, label: str, transform) -> str:
     level = 0
     while ai.count_tokens("\n\n".join(items)) > budget:

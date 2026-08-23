@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS processing_jobs (
     transcript TEXT,
     summary TEXT,
     questions TEXT,
+    explanation TEXT,
+    include_explanations INTEGER NOT NULL DEFAULT 0,
     error_code TEXT,
     safe_error_message TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -134,6 +136,13 @@ def init_db() -> None:
     }
     if "source_url" not in job_columns:
         database.execute("ALTER TABLE processing_jobs ADD COLUMN source_url TEXT")
+    if "explanation" not in job_columns:
+        database.execute("ALTER TABLE processing_jobs ADD COLUMN explanation TEXT")
+    if "include_explanations" not in job_columns:
+        database.execute(
+            "ALTER TABLE processing_jobs ADD COLUMN include_explanations "
+            "INTEGER NOT NULL DEFAULT 0"
+        )
     database.execute(
         """INSERT OR IGNORE INTO users
            (name, username, email, password_hash, is_admin, is_active)

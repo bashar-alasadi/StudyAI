@@ -71,15 +71,19 @@ def create_job(
     status: str = UPLOADING,
     upload_id: str | None = None,
     source_url: str | None = None,
+    include_explanations: bool = False,
 ) -> str:
     job_id = uuid.uuid4().hex
     database = get_db()
     database.execute(
         """INSERT INTO processing_jobs
            (id, user_id, upload_id, source_url, status, original_filename, original_size,
-            current_stage, progress)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)""",
-        (job_id, user_id, upload_id, source_url, status, filename, size, status),
+            current_stage, progress, include_explanations)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)""",
+        (
+            job_id, user_id, upload_id, source_url, status, filename, size, status,
+            int(include_explanations),
+        ),
     )
     database.commit()
     return job_id
@@ -243,7 +247,7 @@ def complete_segment(job_id: str, index: int, transcript: str) -> None:
 
 
 def save_job_result(job_id: str, field: str, value: str) -> None:
-    if field not in {"transcript", "summary", "questions"}:
+    if field not in {"transcript", "summary", "questions", "explanation"}:
         raise ValueError("Unsupported job result field")
     database = get_db()
     database.execute(

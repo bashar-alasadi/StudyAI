@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+import logging
 import shutil
 import socket
 import urllib.error
@@ -13,6 +14,8 @@ from urllib.parse import unquote, urlsplit
 from flask import current_app
 
 from .uploads import ALLOWED_EXTENSIONS
+
+logger = logging.getLogger(__name__)
 
 
 class WebMediaError(RuntimeError):
@@ -48,14 +51,22 @@ def _download_youtube(url: str, work_dir: Path) -> tuple[Path, str]:
 
         output = str(work_dir / "source.%(ext)s")
         options = {
-            "format": "bestaudio/best",
+            # Speech does not benefit from a very high bitrate. Keeping the audio small
+            # makes multi-hour lectures much more reliable on constrained hosting.
+            "format": "bestaudio[abr<=96]/worstaudio/bestaudio/best",
             "outtmpl": output,
             "noplaylist": True,
             "quiet": True,
             "no_warnings": True,
             "max_filesize": current_app.config["MAX_UPLOAD_SIZE_BYTES"],
             "socket_timeout": current_app.config["WEB_DOWNLOAD_TIMEOUT_SECONDS"],
-            "retries": 2,
+            "continuedl": True,
+            "retries": 10,
+            "fragment_retries": 10,
+            "extractor_retries": 5,
+            "file_access_retries": 5,
+            "concurrent_fragment_downloads": 1,
+            "http_chunk_size": 10 * 1024 * 1024,
         }
         with yt_dlp.YoutubeDL(options) as downloader:
             info = downloader.extract_info(url, download=True)
@@ -69,6 +80,7 @@ def _download_youtube(url: str, work_dir: Path) -> tuple[Path, str]:
     except WebMediaError:
         raise
     except Exception as error:
+        logger.exception("YouTube download failed: %s", type(error).__name__)
         raise WebMediaError("تعذر تنزيل فيديو YouTube. تحقق من الرابط وإتاحة الفيديو.") from error
 
 

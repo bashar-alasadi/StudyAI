@@ -4,5 +4,5 @@ google-genai>=1.30,<2
 python-dotenv>=1.1,<2
 redis>=6,<7
 rq>=2.2,<3
-yt-dlp>=2025.8.20
+yt-dlp>=2026.8.19
 gunicorn>=23,<24; platform_system != "Windows"

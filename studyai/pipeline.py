@@ -11,7 +11,12 @@ from pathlib import Path
 
 from flask import current_app
 
-from .content import ContentGenerationError, generate_full_questions, generate_full_summary
+from .content import (
+    ContentGenerationError,
+    generate_explanation_with_examples,
+    generate_full_questions,
+    generate_full_summary,
+)
 from .jobs import (
     ASSEMBLING,
     COMPLETED,
@@ -76,6 +81,15 @@ def process_pipeline(job_id: str, *, sleeper=time.sleep) -> None:
                 "questions",
                 generate_full_questions(managed_ai, transcript, segment_texts, budget),
             )
+            job = get_job(job_id)
+            if job["include_explanations"]:
+                save_job_result(
+                    job_id,
+                    "explanation",
+                    generate_explanation_with_examples(
+                        managed_ai, transcript, segment_texts, budget
+                    ),
+                )
             transition_job(job_id, COMPLETED, JobProgress(COMPLETED, 100))
         _cleanup_success(job_id)
         logger.info("lecture_job_completed job_id=%s", job_id)

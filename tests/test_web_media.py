@@ -16,19 +16,24 @@ def test_url_submission_creates_owned_queued_job(client, monkeypatch):
 
     response = client.post(
         "/api/uploads/url",
-        json={"url": "https://www.youtube.com/watch?v=example"},
+        json={
+            "url": "https://www.youtube.com/watch?v=example",
+            "include_explanations": True,
+        },
         headers={"X-CSRF-Token": csrf(client)},
     )
 
     assert response.status_code == 202
     with client.application.app_context():
         job = get_db().execute(
-            "SELECT status, source_url, upload_id FROM processing_jobs WHERE id = ?",
+            """SELECT status, source_url, upload_id, include_explanations
+               FROM processing_jobs WHERE id = ?""",
             (response.get_json()["job_id"],),
         ).fetchone()
         assert job["status"] == "queued"
         assert job["source_url"].startswith("https://www.youtube.com/")
         assert job["upload_id"] is None
+        assert job["include_explanations"] == 1
 
 
 @pytest.mark.parametrize(

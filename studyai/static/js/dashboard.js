@@ -3,6 +3,7 @@
   const csrf = document.querySelector('meta[name="csrf-token"]').content;
   const elements = Object.fromEntries([
     "audio-file", "drop-zone", "file-name", "upload-button", "lecture-url", "url-button", "upload-status",
+    "include-explanations", "explanation-tab",
     "progress-panel", "progress-percent", "progress-bar", "stage-message",
     "segment-progress", "retry-button", "results-panel", "result-content", "copy-button",
   ].map(id => [id, document.getElementById(id)]));
@@ -79,7 +80,8 @@
         const percent = Math.round(((index + 1) / upload.expected_chunks) * 100);
         showUploadStatus(`جارٍ رفع المحاضرة… ${percent}%`);
       }
-      const queued = await request(`/api/uploads/${upload.upload_id}/complete`, { method: "POST" });
+      const explain = elements["include-explanations"].checked ? "1" : "0";
+      const queued = await request(`/api/uploads/${upload.upload_id}/complete?include_explanations=${explain}`, { method: "POST" });
       localStorage.removeItem(uploadStorageKey);
       currentJobId = queued.job_id;
       elements["progress-panel"].classList.remove("hidden");
@@ -100,7 +102,7 @@
     try {
       const queued = await request("/api/uploads/url", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url, include_explanations: elements["include-explanations"].checked }),
       });
       currentJobId = queued.job_id;
       elements["progress-panel"].classList.remove("hidden");
@@ -142,6 +144,7 @@
 
   async function loadResult() {
     results = await request(`/api/jobs/${currentJobId}/result`);
+    elements["explanation-tab"].classList.toggle("hidden", !results.explanation);
     elements["result-content"].textContent = results[selectedResult] || "";
     elements["results-panel"].classList.remove("hidden");
     activateStep("results-panel");
