@@ -270,5 +270,13 @@ def _ensure_disk_space(required_bytes: int) -> None:
     root = Path(current_app.config["UPLOAD_ROOT"]).resolve()
     root.mkdir(parents=True, exist_ok=True)
     reserve = current_app.config["MIN_FREE_DISK_MB"] * 1024**2
-    if shutil.disk_usage(root).free < required_bytes + reserve:
+    try:
+        free_bytes = shutil.disk_usage(root).free
+    except OSError as error:
+        # WASIX mounts may support normal file I/O without implementing statvfs.
+        current_app.logger.warning(
+            "Disk capacity query unavailable for %s: %s", root, type(error).__name__
+        )
+        return
+    if free_bytes < required_bytes + reserve:
         raise UploadError("لا توجد مساحة تخزين كافية لإكمال الرفع.", 507)

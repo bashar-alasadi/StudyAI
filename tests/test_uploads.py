@@ -105,6 +105,18 @@ def test_assembly_resumes_after_disk_pressure_without_second_full_copy(
         assert (directory / "source.mp3").read_bytes() == b"abcdefgh"
 
 
+def test_upload_continues_when_runtime_cannot_report_disk_capacity(
+    app, client, monkeypatch
+):
+    register_and_login(client)
+    monkeypatch.setattr(
+        "studyai.services.uploads.shutil.disk_usage",
+        lambda _path: (_ for _ in ()).throw(OSError(58, "Not supported")),
+    )
+    response = initialize(client, total_size=4, chunk_size=4)
+    assert response.status_code == 201
+
+
 def test_upload_rejects_invalid_inputs(client):
     register_and_login(client)
     assert initialize(client, "notes.txt").status_code == 415
