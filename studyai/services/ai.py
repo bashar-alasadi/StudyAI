@@ -90,10 +90,9 @@ class AIService:
         try:
             remote_file = self.client.files.upload(file=path)
             remote_file = self._wait_until_ready(remote_file)
-            response = self.client.models.generate_content(
-                model=self.model, contents=[remote_file, TRANSCRIPTION_PROMPT]
+            return self._generate_text_with_fallback(
+                [remote_file, TRANSCRIPTION_PROMPT], "تعذر تفريغ هذا الجزء الآن."
             )
-            return self._response_text(response)
         except AIServiceError:
             raise
         except Exception as error:
@@ -149,21 +148,58 @@ class AIService:
         return "\n\n".join(transcripts)
 
     def _generate_youtube_clip(self, video, prompt: str) -> str:
-        models = list(dict.fromkeys((self.model, "gemini-2.5-flash", "gemini-2.5-flash-lite")))
-        last_error = None
-        for model in models:
+        return self._generate_text_with_fallback(
+            [video, prompt], "تعذر قراءة فيديو YouTube."
+        )
+
+    def _model_candidates(self) -> list[str]:
+        # Use currently supported stable Gemini models. Quotas are enforced per
+        # model, so a second stable model can keep a long lecture moving when
+        # the configured model's free allowance has been consumed.
+        return list(
+            dict.fromkeys(
+                (
+                    self.model,
+                    "gemini-3.7-flash",
+                    "gemini-3.5-flash",
+                    "gemini-3.5-flash-lite",
+                    "gemini-3.1-flash-lite",
+                )
+            )
+        )
+
+    def _generate_text_with_fallback(self, contents, public_message: str) -> str:
+        last_error: AIServiceError | None = None
+        for model in self._model_candidates():
             try:
                 response = self.client.models.generate_content(
-                    model=model, contents=[video, prompt]
+                    model=model, contents=contents
                 )
                 return self._response_text(response)
             except Exception as error:
-                last_error = error
-                classified = self._classify(error, "تعذر قراءة فيديو YouTube.")
-                if not classified.retryable:
-                    raise
-                logger.warning("Gemini model unavailable model=%s; trying fallback", model)
+                classified = self._classify(error, public_message)
+                last_error = classified
+                if not classified.retryable and not self._model_unavailable(error):
+                    raise classified from error
+                logger.warning(
+                    "Gemini model failed model=%s category=%s; trying fallback",
+                    model,
+                    classified.code,
+                )
+        if last_error is None:
+            raise AIServiceError("No Gemini models configured", "لا يوجد نموذج Gemini متاح.")
         raise last_error
+
+    @staticmethod
+    def _model_unavailable(error: Exception) -> bool:
+        message = str(error).lower()
+        return (
+            "model" in message
+            and any(
+                marker in message
+                for marker in ("not_found", "not found", "no longer available", "deprecated")
+            )
+        )
 
     def transcribe(self, stream, extension: str) -> str:
         """Compatibility path for the Phase 1 endpoint; chunked jobs use transcribe_path."""
@@ -194,16 +230,23 @@ class AIService:
         return self._generate(f"{EXPLANATION_PROMPT}\n\nمحتوى المحاضرة:\n{text}")
 
     def count_tokens(self, text: str) -> int:
-        try:
-            response = self.client.models.count_tokens(model=self.model, contents=text)
-            return int(response.total_tokens)
-        except Exception as error:
-            raise self._classify(error, "تعذر قياس حجم النص.") from error
+        last_error: AIServiceError | None = None
+        for model in self._model_candidates():
+            try:
+                response = self.client.models.count_tokens(model=model, contents=text)
+                return int(response.total_tokens)
+            except Exception as error:
+                classified = self._classify(error, "تعذر قياس حجم النص.")
+                last_error = classified
+                if not classified.retryable and not self._model_unavailable(error):
+                    raise classified from error
+        if last_error is None:
+            raise AIServiceError("No Gemini models configured", "لا يوجد نموذج Gemini متاح.")
+        raise last_error
 
     def _generate(self, prompt: str) -> str:
         try:
-            response = self.client.models.generate_content(model=self.model, contents=prompt)
-            return self._response_text(response)
+            return self._generate_text_with_fallback(prompt, "تعذر إكمال الطلب الآن.")
         except AIServiceError:
             raise
         except Exception as error:
@@ -250,10 +293,24 @@ class AIService:
 
     @staticmethod
     def _classify(error: Exception, public_message: str) -> AIServiceError:
+        if isinstance(error, AIServiceError):
+            return error
         status = getattr(error, "status_code", None) or getattr(error, "code", None)
+        message = str(error).lower()
+        quota_exhausted = status == 429 or any(
+            marker in message
+            for marker in ("resource_exhausted", "quota exceeded", "quota_exceeded")
+        )
+        if quota_exhausted:
+            return AIServiceError(
+                f"{type(error).__name__}: {error}",
+                "نفدت حصة مزوّد الذكاء الاصطناعي لهذا النموذج. جرّب لاحقًا أو أضف رصيدًا للمزوّد.",
+                429,
+                retryable=True,
+                code="provider_quota",
+            )
         retryable = isinstance(error, (TimeoutError, ConnectionError)) or status in {
             408,
-            429,
             500,
             502,
             503,

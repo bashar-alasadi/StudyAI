@@ -99,6 +99,41 @@ def test_token_count_and_generation():
     assert service.generate_questions("محاضرة كاملة") == "نص كامل"
 
 
+def test_youtube_model_fallback_uses_supported_stable_model():
+    class QuotaError(RuntimeError):
+        status_code = 429
+
+    class FallbackModels:
+        def __init__(self):
+            self.calls = []
+
+        def generate_content(self, *, model, **_kwargs):
+            self.calls.append(model)
+            if model == "gemini-3.6-flash":
+                raise QuotaError("RESOURCE_EXHAUSTED: quota exceeded")
+            return SimpleNamespace(text="تفريغ المقطع")
+
+    models = FallbackModels()
+    service = AIService(Client(models=models), "gemini-3.6-flash")
+    assert service._generate_youtube_clip(None, "prompt") == "تفريغ المقطع"
+    assert models.calls == ["gemini-3.6-flash", "gemini-3.7-flash"]
+
+
+def test_quota_error_has_clear_public_message():
+    class QuotaError(RuntimeError):
+        status_code = 429
+
+    classified = AIService._classify(QuotaError("RESOURCE_EXHAUSTED"), "generic")
+    assert classified.code == "provider_quota"
+    assert classified.retryable is True
+    assert "نفدت حصة" in classified.public_message
+
+
+def test_existing_ai_service_error_is_not_masked():
+    original = AIServiceError("quota", "رسالة واضحة", 429, retryable=True, code="quota")
+    assert AIService._classify(original, "generic") is original
+
+
 def test_openai_provider_transcribes_and_generates(tmp_path):
     class Transcriptions:
         def create(self, **_kwargs):
