@@ -1,10 +1,10 @@
 from conftest import csrf, register_and_login
 
 
-def test_api_requires_authentication(client):
+def test_unknown_public_job_is_hidden(client):
     client.get("/")
     response = client.post("/api/jobs/unknown/retry", headers={"X-CSRF-Token": csrf(client)})
-    assert response.status_code == 401
+    assert response.status_code == 404
 
 
 def test_synchronous_phase_one_endpoints_are_removed(client):

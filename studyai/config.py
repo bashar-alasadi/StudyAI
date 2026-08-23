@@ -37,6 +37,9 @@ def build_config(environ: Mapping[str, str] | None = None) -> dict[str, object]:
             for email in env.get("ADMIN_EMAILS", "").split(",")
             if email.strip()
         },
+        "ADMIN_USERNAME": env.get("ADMIN_USERNAME", "admin").strip() or "admin",
+        "ADMIN_PASSWORD": env.get("ADMIN_PASSWORD", ""),
+        "ADMIN_PASSWORD_HASH": env.get("ADMIN_PASSWORD_HASH", ""),
         "GEMINI_MODEL": env.get("GEMINI_MODEL", "gemini-3.6-flash"),
         "REDIS_URL": env.get("REDIS_URL", "redis://localhost:6379/0"),
         "RQ_QUEUE": env.get("RQ_QUEUE", "studyai"),

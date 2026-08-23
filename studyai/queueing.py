@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
 from typing import Protocol
 
 from flask import Flask, current_app
@@ -53,9 +54,16 @@ class ThreadJobQueue:
     def __init__(self, app: Flask):
         self.app = app
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="studyai")
+        self._active: set[str] = set()
+        self._lock = Lock()
 
     def enqueue(self, job_id: str) -> str:
-        self.executor.submit(self._run, job_id)
+        with self._lock:
+            if job_id in self._active:
+                return f"thread:{job_id}"
+            self._active.add(job_id)
+        future = self.executor.submit(self._run, job_id)
+        future.add_done_callback(lambda completed: self._finished(job_id, completed))
         return f"thread:{job_id}"
 
     def _run(self, job_id: str) -> None:
@@ -63,6 +71,15 @@ class ThreadJobQueue:
 
         with self.app.app_context():
             process_pipeline(job_id)
+
+    def _finished(self, job_id: str, future) -> None:
+        with self._lock:
+            self._active.discard(job_id)
+        error = future.exception()
+        if error is not None:
+            self.app.logger.exception(
+                "Background lecture job escaped the pipeline", exc_info=error
+            )
 
 
 def init_queue(app: Flask) -> None:

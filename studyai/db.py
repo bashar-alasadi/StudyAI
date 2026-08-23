@@ -134,6 +134,12 @@ def init_db() -> None:
     }
     if "source_url" not in job_columns:
         database.execute("ALTER TABLE processing_jobs ADD COLUMN source_url TEXT")
+    database.execute(
+        """INSERT OR IGNORE INTO users
+           (name, username, email, password_hash, is_admin, is_active)
+           VALUES (?, ?, ?, ?, 0, 1)""",
+        ("الزوار", "__public__", "public@studyai.local", "!"),
+    )
     database.commit()
 
 

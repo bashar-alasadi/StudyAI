@@ -24,7 +24,7 @@ from studyai.queueing import SynchronousJobQueue
 
 def user_id(app):
     with app.app_context():
-        return get_db().execute("SELECT id FROM users WHERE username = 'student'").fetchone()[0]
+        return get_db().execute("SELECT id FROM users WHERE username = '__public__'").fetchone()[0]
 
 
 def test_job_state_machine_and_progress(app, client):

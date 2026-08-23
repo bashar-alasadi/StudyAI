@@ -21,6 +21,9 @@ def app(tmp_path):
     return create_app({
         "TESTING": True,
         "SECRET_KEY": "test-secret",
+        "ADMIN_USERNAME": "admin",
+        "ADMIN_PASSWORD": "admin-test-pass",
+        "ADMIN_PASSWORD_HASH": "",
         "DATABASE": str(tmp_path / "test.sqlite3"),
         "AI_SERVICE_FACTORY": FakeAIService,
         "JOB_QUEUE_MODE": "sync",
@@ -43,12 +46,7 @@ def csrf(client):
 
 
 def register_and_login(client):
-    client.get("/register")
-    client.post("/register", data={
-        "csrf_token": csrf(client), "name": "طالب تجريبي", "username": "student",
-        "email": "student@example.com", "password": "secure-pass",
-    })
-    client.get("/login")
-    return client.post("/login", data={
-        "csrf_token": csrf(client), "username": "student", "password": "secure-pass",
+    client.get("/admin/login")
+    return client.post("/admin/login", data={
+        "csrf_token": csrf(client), "username": "admin", "password": "admin-test-pass",
     })

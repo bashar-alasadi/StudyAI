@@ -123,7 +123,7 @@ def test_conflicting_duplicate_chunk_is_rejected(client):
     assert put_chunk(client, upload_id, 0, b"wxyz").status_code == 409
 
 
-def test_upload_is_private_to_owner(app, client):
+def test_upload_is_private_to_browser_session(app, client):
     register_and_login(client)
     upload_id = initialize(client).get_json()["upload_id"]
     with app.app_context():
@@ -132,10 +132,10 @@ def test_upload_is_private_to_owner(app, client):
             "INSERT INTO users (name, username, email, password_hash) VALUES (?, ?, ?, ?)",
             ("Other", "other", "other@example.com", "hash"),
         )
-        other_id = database.execute("SELECT id FROM users WHERE username='other'").fetchone()[0]
         database.commit()
     with client.session_transaction() as session:
-        session["user_id"] = other_id
+        session.pop("admin_authenticated", None)
+        session["public_upload_ids"] = []
     assert client.get(f"/api/uploads/{upload_id}").status_code == 404
     assert put_chunk(client, upload_id, 0, b"abcd").status_code == 404
 

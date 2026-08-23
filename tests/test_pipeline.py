@@ -80,7 +80,7 @@ class FakePipelineAI:
 def make_queued_job(app, client):
     register_and_login(client)
     with app.app_context():
-        owner = get_db().execute("SELECT id FROM users WHERE username='student'").fetchone()[0]
+        owner = get_db().execute("SELECT id FROM users WHERE username='__public__'").fetchone()[0]
         upload = create_upload(owner, "lecture.mp4", 4, 4)
         save_chunk(upload["id"], owner, 0, io.BytesIO(b"data"))
         complete_upload(upload["id"], owner)

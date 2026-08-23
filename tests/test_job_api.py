@@ -6,7 +6,7 @@ from studyai.jobs import UPLOADING, create_job, fail_job, get_job
 
 def owner_id(app):
     with app.app_context():
-        return get_db().execute("SELECT id FROM users WHERE username='student'").fetchone()[0]
+        return get_db().execute("SELECT id FROM users WHERE username='__public__'").fetchone()[0]
 
 
 def test_job_status_result_and_latest_are_owner_scoped(app, client):
@@ -26,11 +26,9 @@ def test_job_status_result_and_latest_are_owner_scoped(app, client):
             ("Other", "other-job-user", "other-job@example.com", "hash"),
         )
         database.commit()
-        other_id = database.execute(
-            "SELECT id FROM users WHERE username='other-job-user'"
-        ).fetchone()[0]
     with client.session_transaction() as session:
-        session["user_id"] = other_id
+        session.pop("admin_authenticated", None)
+        session["public_job_ids"] = []
     assert client.get(f"/api/jobs/{job_id}").status_code == 404
 
 

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from flask import Blueprint, current_app, g, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
-from .auth import login_required
+from .auth import owns_resource, public_user_id, remember_resource
 from .jobs import QUEUED, UPLOADED, create_job, fail_job, get_job_for_upload, transition_job
 from .queueing import get_job_queue
 from .services.uploads import UploadError, complete_upload, create_upload, get_upload, save_chunk
@@ -14,7 +14,6 @@ uploads_bp = Blueprint("uploads", __name__, url_prefix="/api/uploads")
 
 
 @uploads_bp.post("/url")
-@login_required
 def initialize_url_upload():
     payload = request.get_json(silent=True) or {}
     try:
@@ -22,8 +21,9 @@ def initialize_url_upload():
     except WebMediaError as error:
         return jsonify(error=error.public_message), 400
     job_id = create_job(
-        g.user["id"], "رابط محاضرة", status=QUEUED, source_url=source_url
+        public_user_id(), "رابط محاضرة", status=QUEUED, source_url=source_url
     )
+    remember_resource("job", job_id)
     try:
         get_job_queue().enqueue(job_id)
     except Exception as error:
@@ -36,12 +36,11 @@ def initialize_url_upload():
 
 
 @uploads_bp.post("")
-@login_required
 def initialize_upload():
     payload = request.get_json(silent=True) or {}
     try:
         upload = create_upload(
-            g.user["id"],
+            public_user_id(),
             str(payload.get("filename", "")),
             int(payload.get("total_size", 0)),
             int(payload["chunk_size"]) if payload.get("chunk_size") else None,
@@ -50,43 +49,50 @@ def initialize_upload():
         status = error.status_code if isinstance(error, UploadError) else 400
         message = str(error) if isinstance(error, UploadError) else "بيانات الرفع غير صالحة."
         return jsonify(error=message), status
+    remember_resource("upload", upload["id"])
     return jsonify(_serialize_upload(upload)), 201
 
 
 @uploads_bp.get("/<upload_id>")
-@login_required
 def upload_status(upload_id: str):
-    upload = get_upload(upload_id, g.user["id"])
+    if not owns_resource("upload", upload_id):
+        return jsonify(error="جلسة الرفع غير موجودة."), 404
+    upload = get_upload(upload_id, public_user_id())
     if upload is None:
         return jsonify(error="جلسة الرفع غير موجودة."), 404
     return jsonify(_serialize_upload(upload))
 
 
 @uploads_bp.put("/<upload_id>/chunks/<int:index>")
-@login_required
 def upload_chunk(upload_id: str, index: int):
+    if not owns_resource("upload", upload_id):
+        return jsonify(error="جلسة الرفع غير موجودة."), 404
     try:
-        chunk = save_chunk(upload_id, g.user["id"], index, request.stream)
+        chunk = save_chunk(upload_id, public_user_id(), index, request.stream)
     except UploadError as error:
         return jsonify(error=str(error)), error.status_code
     return jsonify(index=index, size=chunk["size"])
 
 
 @uploads_bp.post("/<upload_id>/complete")
-@login_required
 def finalize_upload(upload_id: str):
+    if not owns_resource("upload", upload_id):
+        return jsonify(error="جلسة الرفع غير موجودة."), 404
     try:
-        complete_upload(upload_id, g.user["id"])
-        upload = get_upload(upload_id, g.user["id"])
+        owner_id = public_user_id()
+        complete_upload(upload_id, owner_id)
+        upload = get_upload(upload_id, owner_id)
     except UploadError as error:
         return jsonify(error=str(error)), error.status_code
-    existing_job = get_job_for_upload(upload_id, g.user["id"])
+    existing_job = get_job_for_upload(upload_id, owner_id)
     if existing_job:
+        remember_resource("job", existing_job["id"])
         return jsonify(job_id=existing_job["id"], status=existing_job["status"]), 202
     job_id = create_job(
-        g.user["id"], upload["original_filename"], upload["total_size"], UPLOADED, upload_id
+        owner_id, upload["original_filename"], upload["total_size"], UPLOADED, upload_id
     )
     transition_job(job_id, QUEUED)
+    remember_resource("job", job_id)
     try:
         get_job_queue().enqueue(job_id)
     except Exception as error:

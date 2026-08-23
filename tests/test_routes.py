@@ -11,14 +11,14 @@ def test_dependency_health_does_not_expose_connection_details(client):
     response = client.get("/health/dependencies")
     assert response.status_code in {200, 503}
     payload = response.get_json()
-    assert set(payload) == {"application", "database", "redis", "ffmpeg", "ffprobe"}
+    assert set(payload) == {"application", "database", "ai", "redis", "ffmpeg", "ffprobe"}
     assert "redis://" not in response.text
 
 
-def test_dashboard_redirects_guests(client):
+def test_dashboard_is_public(client):
     response = client.get("/dashboard")
-    assert response.status_code == 302
-    assert response.headers["Location"].endswith("/login")
+    assert response.status_code == 200
+    assert "لا تحتاج إلى تسجيل" in response.text
 
 
 def test_unknown_page_has_friendly_error(client):

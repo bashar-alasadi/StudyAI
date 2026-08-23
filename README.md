@@ -139,7 +139,7 @@ together so both processes share SQLite and uploaded media. Configure the hostin
 - Build method: Dockerfile (no custom build/start command).
 - Health check: `/health`.
 - Container port: use the platform-provided `PORT`; the default is `8000`.
-- Persistent volume: mount at `/app/instance`. Without it, accounts and jobs are lost on redeploy.
+- Persistent volume: mount at `/app/instance`. Without it, jobs and uploaded chunks are lost on redeploy.
 - Redis: create a private managed Redis service and set its internal URL as `REDIS_URL`.
 - HTTPS: enable the hosting platform's managed HTTPS/proxy.
 
@@ -148,19 +148,12 @@ Required production environment variables:
 ```dotenv
 APP_ENV=production
 SECRET_KEY=generate-a-long-random-secret
-ADMIN_EMAILS=owner@your-domain.example
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=use-a-long-unique-password
 GEMINI_API_KEY=your-google-ai-api-key
 REDIS_URL=redis://your-private-redis:6379/0
 DATABASE_PATH=/app/instance/studyai.sqlite3
 UPLOAD_ROOT=/app/instance/uploads
-MAIL_DELIVERY_MODE=smtp
-MAIL_FROM=StudyAI <no-reply@your-domain.example>
-SMTP_HOST=your-smtp-host
-SMTP_PORT=587
-SMTP_USERNAME=your-smtp-user
-SMTP_PASSWORD=your-smtp-app-password
-SMTP_USE_TLS=true
-SMTP_USE_SSL=false
 ```
 
 The deployment must provide enough persistent disk for the configured `MAX_UPLOAD_GB`. Never expose
@@ -169,12 +162,8 @@ locally when Docker is available.
 
 ### Administration
 
-Set `ADMIN_EMAILS` to the owner's email before registering. Matching accounts receive administrator
-access automatically and see the `/admin/` dashboard. For an existing account, run:
-
-```powershell
-flask --app app promote-admin owner@example.com
-```
+Students use `/dashboard` directly without accounts. Only the site administrator signs in at
+`/admin/login`, using `ADMIN_USERNAME` and either `ADMIN_PASSWORD` or `ADMIN_PASSWORD_HASH`.
 
 Administrators can review site statistics and processing jobs, suspend/reactivate users, grant/revoke
 administrator access, and configure the active Gemini model and API key. Provider keys are encrypted at
@@ -212,9 +201,9 @@ flask --app app cleanup-storage
 ```
 
 - `/health` checks the application and SQLite.
-- `/health/dependencies` reports only booleans for Redis/FFmpeg/ffprobe; it never calls Gemini.
-- Apply public login/upload rate limiting at the reverse proxy. The app still enforces authentication,
-  CSRF, ownership, chunk count/size, total size, media validation, and disk reserve.
+- `/health/dependencies` reports booleans for the queue, media tools, database, and Gemini configuration.
+- Apply public upload rate limiting at the reverse proxy. The app enforces CSRF, browser-session
+  ownership, chunk count/size, total size, media validation, and disk reserve.
 - Run `cleanup-storage` periodically. Incomplete uploads older than 24 hours and retained failed-job media
   older than 7 days are removed by default; database audit records remain intact.
 

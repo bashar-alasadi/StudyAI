@@ -19,6 +19,7 @@
   let results = {};
   let selectedResult = "transcript";
   let pollTimer = null;
+  const uploadStorageKey = "studyai-active-upload";
 
   elements["audio-file"].addEventListener("change", () => chooseFile(elements["audio-file"].files[0]));
   ["dragenter", "dragover"].forEach(name => elements["drop-zone"].addEventListener(name, event => {
@@ -58,20 +59,28 @@
     if (!file) return showUploadStatus("اختر ملفًا أولًا.", true);
     setButtonLoading(true);
     try {
-      const upload = await request("/api/uploads", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename: file.name, total_size: file.size }),
-      });
+      let upload = await resumeUpload(file);
+      if (!upload) {
+        upload = await request("/api/uploads", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename: file.name, total_size: file.size }),
+        });
+        localStorage.setItem(uploadStorageKey, JSON.stringify({
+          upload_id: upload.upload_id, name: file.name, size: file.size,
+          modified: file.lastModified,
+        }));
+      }
       for (let index = upload.received_chunks; index < upload.expected_chunks; index += 1) {
         const start = index * upload.chunk_size;
         const chunk = file.slice(start, Math.min(start + upload.chunk_size, file.size));
-        await request(`/api/uploads/${upload.upload_id}/chunks/${index}`, {
+        await requestWithRetry(`/api/uploads/${upload.upload_id}/chunks/${index}`, {
           method: "PUT", headers: { "Content-Type": "application/octet-stream" }, body: chunk,
         });
         const percent = Math.round(((index + 1) / upload.expected_chunks) * 100);
         showUploadStatus(`جارٍ رفع المحاضرة… ${percent}%`);
       }
       const queued = await request(`/api/uploads/${upload.upload_id}/complete`, { method: "POST" });
+      localStorage.removeItem(uploadStorageKey);
       currentJobId = queued.job_id;
       elements["progress-panel"].classList.remove("hidden");
       activateStep("progress-panel");
@@ -163,6 +172,27 @@
     try { data = await response.json(); } catch { data = {}; }
     if (!response.ok) throw new Error(data.error || "تعذر إكمال الطلب.");
     return data;
+  }
+  async function requestWithRetry(url, options, attempts = 5) {
+    let lastError;
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      try { return await request(url, options); }
+      catch (error) {
+        lastError = error;
+        if (attempt + 1 < attempts) await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** attempt));
+      }
+    }
+    throw lastError;
+  }
+  async function resumeUpload(file) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(uploadStorageKey) || "null");
+      if (!saved || saved.name !== file.name || saved.size !== file.size || saved.modified !== file.lastModified) return null;
+      return await request(`/api/uploads/${saved.upload_id}`);
+    } catch {
+      localStorage.removeItem(uploadStorageKey);
+      return null;
+    }
   }
   function chooseFile(file) { if (file) elements["file-name"].textContent = `${file.name} — ${formatBytes(file.size)}`; }
   function showUploadStatus(message, error = false) { elements["upload-status"].textContent = message; elements["upload-status"].classList.toggle("error", error); }

@@ -91,6 +91,18 @@ def process_pipeline(job_id: str, *, sleeper=time.sleep) -> None:
         public = getattr(error, "public_message", "تعذرت معالجة المحاضرة كاملة.")
         fail_job(job_id, code, public)
         logger.warning("lecture_job_failed job_id=%s category=%s", job_id, code)
+    except Exception as error:
+        logger.exception(
+            "lecture_job_crashed job_id=%s category=%s", job_id, type(error).__name__
+        )
+        try:
+            fail_job(
+                job_id,
+                "unexpected_pipeline_error",
+                "تعذرت المعالجة بسبب عطل مؤقت. يمكنك إعادة المحاولة من نفس المهمة.",
+            )
+        except Exception:
+            logger.exception("lecture_job_failure_state_write_failed job_id=%s", job_id)
 
 
 def _prepare_media(job_id: str, media: MediaService) -> list[SegmentFile]:

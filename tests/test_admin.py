@@ -11,9 +11,10 @@ def make_admin(app):
 
 
 def test_admin_dashboard_requires_admin(app, client):
+    response = client.get("/admin/")
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/admin/login")
     register_and_login(client)
-    assert client.get("/admin/").status_code == 403
-    make_admin(app)
     response = client.get("/admin/")
     assert response.status_code == 200
     assert "لوحة الإدارة" in response.text
@@ -86,7 +87,12 @@ def test_admin_cannot_remove_own_access(app, client):
     with app.app_context():
         from studyai.db import get_db
 
-        user_id = get_db().execute("SELECT id FROM users WHERE username = 'student'").fetchone()[0]
+        user_id = get_db().execute(
+            "SELECT id FROM users WHERE username = '__public__'"
+        ).fetchone()[0]
     client.post(f"/admin/users/{user_id}/toggle-admin", data={"csrf_token": csrf(client)})
     with app.app_context():
-        assert get_db().execute("SELECT is_admin FROM users WHERE id = ?", (user_id,)).fetchone()[0]
+        row = get_db().execute(
+            "SELECT is_admin FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        assert row[0] == 0

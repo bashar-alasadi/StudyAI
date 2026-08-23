@@ -78,6 +78,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         payload = {
             "application": True,
             "database": True,
+            "ai": bool(app.config["GEMINI_API_KEY"]),
             "redis": redis_ok,
             "ffmpeg": ffmpeg_ok,
             "ffprobe": ffprobe_ok,
@@ -138,6 +139,10 @@ def _validate_config(app: Flask) -> None:
     secret = app.config.get("SECRET_KEY", "")
     if app.config["ENVIRONMENT"] == "production" and (not secret or secret == DEVELOPMENT_SECRET):
         raise RuntimeError("SECRET_KEY must be set to a strong value in production")
+    if app.config["ENVIRONMENT"] == "production" and not (
+        app.config["ADMIN_PASSWORD"] or app.config["ADMIN_PASSWORD_HASH"]
+    ):
+        raise RuntimeError("ADMIN_PASSWORD or ADMIN_PASSWORD_HASH must be set in production")
 
 
 def _configure_logging(app: Flask) -> None:

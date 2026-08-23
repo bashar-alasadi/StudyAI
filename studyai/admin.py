@@ -2,27 +2,14 @@
 
 from __future__ import annotations
 
-import functools
-
 import click
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, url_for
 
+from .auth import admin_required
 from .db import get_db
 from .providers import encrypt_api_key
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
-
-
-def admin_required(view):
-    @functools.wraps(view)
-    def wrapped(**kwargs):
-        if g.user is None:
-            return redirect(url_for("auth.login"))
-        if not g.user["is_admin"] or not g.user["is_active"]:
-            abort(403)
-        return view(**kwargs)
-
-    return wrapped
 
 
 @admin_bp.get("/")
