@@ -72,17 +72,18 @@ def create_job(
     upload_id: str | None = None,
     source_url: str | None = None,
     include_explanations: bool = False,
+    duration_seconds: float | None = None,
 ) -> str:
     job_id = uuid.uuid4().hex
     database = get_db()
     database.execute(
         """INSERT INTO processing_jobs
            (id, user_id, upload_id, source_url, status, original_filename, original_size,
-            current_stage, progress, include_explanations)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)""",
+            current_stage, progress, include_explanations, duration_seconds)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)""",
         (
             job_id, user_id, upload_id, source_url, status, filename, size, status,
-            int(include_explanations),
+            int(include_explanations), duration_seconds,
         ),
     )
     database.commit()

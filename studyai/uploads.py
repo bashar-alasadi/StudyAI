@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from flask import Blueprint, current_app, jsonify, request
 
 from .auth import owns_resource, public_user_id, remember_resource
@@ -17,6 +19,14 @@ uploads_bp = Blueprint("uploads", __name__, url_prefix="/api/uploads")
 def initialize_url_upload():
     payload = request.get_json(silent=True) or {}
     include_explanations = bool(payload.get("include_explanations", False))
+    duration_seconds = payload.get("duration_seconds")
+    if duration_seconds is not None:
+        try:
+            duration_seconds = float(duration_seconds)
+            if not math.isfinite(duration_seconds) or not 0 < duration_seconds <= 24 * 3600:
+                raise ValueError
+        except (TypeError, ValueError):
+            return jsonify(error="مدة فيديو YouTube غير صالحة."), 400
     try:
         source_url = validate_source_url(str(payload.get("url", "")))
     except WebMediaError as error:
@@ -24,6 +34,7 @@ def initialize_url_upload():
     job_id = create_job(
         public_user_id(), "رابط محاضرة", status=QUEUED, source_url=source_url,
         include_explanations=include_explanations,
+        duration_seconds=duration_seconds,
     )
     remember_resource("job", job_id)
     try:

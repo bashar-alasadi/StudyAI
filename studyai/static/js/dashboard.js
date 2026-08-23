@@ -20,6 +20,7 @@
   let results = {};
   let selectedResult = "transcript";
   let pollTimer = null;
+  let youtubeApiPromise = null;
   const uploadStorageKey = "studyai-active-upload";
 
   elements["audio-file"].addEventListener("change", () => chooseFile(elements["audio-file"].files[0]));
@@ -100,9 +101,14 @@
     setUrlLoading(true);
     showUploadStatus("جارٍ إضافة الرابط…");
     try {
+      const durationSeconds = await getYouTubeDuration(url);
       const queued = await request("/api/uploads/url", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, include_explanations: elements["include-explanations"].checked }),
+        body: JSON.stringify({
+          url,
+          duration_seconds: durationSeconds,
+          include_explanations: elements["include-explanations"].checked,
+        }),
       });
       currentJobId = queued.job_id;
       elements["progress-panel"].classList.remove("hidden");
@@ -175,6 +181,70 @@
     try { data = await response.json(); } catch { data = {}; }
     if (!response.ok) throw new Error(data.error || "تعذر إكمال الطلب.");
     return data;
+  }
+
+  function youtubeVideoId(value) {
+    try {
+      const parsed = new URL(value);
+      const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+      if (host === "youtu.be") return parsed.pathname.split("/").filter(Boolean)[0] || null;
+      if (host.endsWith("youtube.com")) {
+        if (parsed.searchParams.get("v")) return parsed.searchParams.get("v");
+        const parts = parsed.pathname.split("/").filter(Boolean);
+        if (["live", "shorts", "embed"].includes(parts[0])) return parts[1] || null;
+      }
+    } catch { /* The server will show the URL validation message. */ }
+    return null;
+  }
+
+  function loadYouTubeApi() {
+    if (window.YT && window.YT.Player) return Promise.resolve();
+    if (youtubeApiPromise) return youtubeApiPromise;
+    youtubeApiPromise = new Promise((resolve, reject) => {
+      const previous = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => {
+        if (typeof previous === "function") previous();
+        resolve();
+      };
+      const script = document.createElement("script");
+      script.src = "https://www.youtube.com/iframe_api";
+      script.onerror = () => reject(new Error("YouTube API unavailable"));
+      document.head.appendChild(script);
+      setTimeout(() => reject(new Error("YouTube API timeout")), 10000);
+    });
+    return youtubeApiPromise;
+  }
+
+  async function getYouTubeDuration(url) {
+    const videoId = youtubeVideoId(url);
+    if (!videoId) return null;
+    try { await loadYouTubeApi(); } catch { return null; }
+    return await new Promise(resolve => {
+      const holder = document.createElement("div");
+      holder.id = `youtube-duration-${Date.now()}`;
+      holder.style.cssText = "position:fixed;left:-9999px;width:1px;height:1px;overflow:hidden";
+      document.body.appendChild(holder);
+      let player;
+      let settled = false;
+      const finish = value => {
+        if (settled) return;
+        settled = true;
+        try { if (player) player.destroy(); } catch { holder.remove(); }
+        resolve(Number.isFinite(value) && value > 0 ? value : null);
+      };
+      const timeout = setTimeout(() => finish(null), 10000);
+      player = new window.YT.Player(holder.id, {
+        width: 1, height: 1, videoId,
+        playerVars: { autoplay: 0, controls: 0, playsinline: 1 },
+        events: {
+          onReady: event => {
+            clearTimeout(timeout);
+            finish(Number(event.target.getDuration()));
+          },
+          onError: () => { clearTimeout(timeout); finish(null); },
+        },
+      });
+    });
   }
   async function requestWithRetry(url, options, attempts = 5) {
     let lastError;

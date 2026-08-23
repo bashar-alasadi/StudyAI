@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
 import tempfile
 import time
@@ -106,25 +107,33 @@ class AIService:
                         "Gemini remote file cleanup failed: %s", type(cleanup_error).__name__
                     )
 
-    def transcribe_youtube_url(self, url: str, progress_callback=None) -> str:
+    def transcribe_youtube_url(
+        self, url: str, duration_seconds: float | None = None, progress_callback=None
+    ) -> str:
         """Read long public videos in bounded clips, then return the complete transcript."""
         from google.genai import types
 
         clip_seconds = 90 * 60
-        maximum_clips = 6  # Covers public videos up to the free-tier eight-hour ceiling.
+        maximum_clips = (
+            min(16, max(1, math.ceil(duration_seconds / clip_seconds)))
+            if duration_seconds
+            else 6
+        )
         transcripts: list[str] = []
         for index in range(maximum_clips):
             start = index * clip_seconds
-            end = (index + 1) * clip_seconds
+            end = min((index + 1) * clip_seconds, duration_seconds or math.inf)
             video = types.Part(
                 file_data=types.FileData(file_uri=url),
                 video_metadata=types.VideoMetadata(
-                    start_offset=f"{start}s", end_offset=f"{end}s", fps=0.1
+                    start_offset=f"{start}s", end_offset=f"{end:g}s", fps=0.1
                 ),
             )
             prompt = (
                 f"هذا المقطع الزمني من {start} إلى {end} ثانية. "
-                "إذا كان المقطع بعد نهاية الفيديو فأعد فقط [NO_MEDIA].\n"
+                "إذا كان المقطع بعد نهاية الفيديو فأعد فقط [NO_MEDIA]. "
+                "وإذا وصل هذا المقطع إلى النهاية الفعلية للفيديو فأضف في آخر سطر "
+                "[END_OF_VIDEO]. لا تضف هذه العلامة إذا كان الفيديو مستمرًا بعد هذا المقطع.\n"
                 + TRANSCRIPTION_PROMPT
             )
             try:
@@ -136,16 +145,27 @@ class AIService:
                 raise self._classify(
                     error, "تعذر على خدمة الذكاء الاصطناعي قراءة فيديو YouTube الآن."
                 ) from error
-            if text.strip() == "[NO_MEDIA]":
+            text, reached_end = self._parse_youtube_clip_result(text)
+            if not text:
                 break
-            transcripts.append(f"[المقطع {index + 1}]\n{text.strip()}")
+            transcripts.append(f"[المقطع {index + 1}]\n{text}")
             if progress_callback:
                 progress_callback(index + 1, maximum_clips)
+            if reached_end:
+                break
         if not transcripts:
             raise AIServiceError(
                 "YouTube URL returned no media", "لم يُرجع فيديو YouTube محتوى قابلًا للتفريغ."
             )
         return "\n\n".join(transcripts)
+
+    @staticmethod
+    def _parse_youtube_clip_result(text: str) -> tuple[str, bool]:
+        cleaned = text.strip()
+        if cleaned == "[NO_MEDIA]":
+            return "", True
+        reached_end = "[END_OF_VIDEO]" in cleaned
+        return cleaned.replace("[END_OF_VIDEO]", "").strip(), reached_end
 
     def _generate_youtube_clip(self, video, prompt: str) -> str:
         return self._generate_text_with_fallback(

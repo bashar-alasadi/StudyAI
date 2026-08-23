@@ -134,6 +134,15 @@ def test_existing_ai_service_error_is_not_masked():
     assert AIService._classify(original, "generic") is original
 
 
+def test_youtube_end_marker_is_removed_and_stops_extra_clip():
+    text, reached_end = AIService._parse_youtube_clip_result(
+        "آخر كلام في المحاضرة.\n[END_OF_VIDEO]"
+    )
+    assert text == "آخر كلام في المحاضرة."
+    assert reached_end is True
+    assert AIService._parse_youtube_clip_result("[NO_MEDIA]") == ("", True)
+
+
 def test_openai_provider_transcribes_and_generates(tmp_path):
     class Transcriptions:
         def create(self, **_kwargs):

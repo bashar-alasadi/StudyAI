@@ -206,15 +206,17 @@ def _prepare_ai_youtube_segment(job_id: str, url: str, work_dir: Path) -> list[S
     ai = AIService.from_config(current_app.config, resolve_provider=False)
     manager = ai if hasattr(ai, "__enter__") else nullcontext(ai)
     with manager as managed_ai:
+        job = get_job(job_id)
         transcript = managed_ai.transcribe_youtube_url(
             url,
+            duration_seconds=float(job["duration_seconds"] or 0) or None,
             progress_callback=lambda completed, total: update_progress(
                 job_id,
                 JobProgress(SEGMENTING, 12 + int(55 * completed / total), completed, total),
             ),
         )
     complete_segment(job_id, 0, transcript)
-    set_media_metadata(job_id, "youtube_url", 1)
+    set_media_metadata(job_id, "youtube_url", float(job["duration_seconds"] or 1))
     return [file]
 
 

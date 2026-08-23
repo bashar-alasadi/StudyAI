@@ -25,6 +25,7 @@ def test_url_submission_creates_owned_queued_job(client, monkeypatch):
         json={
             "url": "https://www.youtube.com/watch?v=example",
             "include_explanations": True,
+            "duration_seconds": 14752.3,
         },
         headers={"X-CSRF-Token": csrf(client)},
     )
@@ -32,7 +33,7 @@ def test_url_submission_creates_owned_queued_job(client, monkeypatch):
     assert response.status_code == 202
     with client.application.app_context():
         job = get_db().execute(
-            """SELECT status, source_url, upload_id, include_explanations
+            """SELECT status, source_url, upload_id, include_explanations, duration_seconds
                FROM processing_jobs WHERE id = ?""",
             (response.get_json()["job_id"],),
         ).fetchone()
@@ -40,6 +41,7 @@ def test_url_submission_creates_owned_queued_job(client, monkeypatch):
         assert job["source_url"].startswith("https://www.youtube.com/")
         assert job["upload_id"] is None
         assert job["include_explanations"] == 1
+        assert job["duration_seconds"] == pytest.approx(14752.3)
 
 
 @pytest.mark.parametrize(
