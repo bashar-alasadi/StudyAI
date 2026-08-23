@@ -106,22 +106,46 @@ class AIService:
                     )
 
     def transcribe_youtube_url(self, url: str) -> str:
-        """Ask Gemini to read a public YouTube video without downloading it on our host."""
-        try:
-            from google.genai import types
+        """Read long public videos in bounded clips, then return the complete transcript."""
+        from google.genai import types
 
-            video = types.Part(file_data=types.FileData(file_uri=url))
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=[video, TRANSCRIPTION_PROMPT],
+        clip_seconds = 30 * 60
+        maximum_clips = 16  # Gemini free-tier YouTube ceiling is eight hours per day.
+        transcripts: list[str] = []
+        for index in range(maximum_clips):
+            start = index * clip_seconds
+            end = (index + 1) * clip_seconds
+            video = types.Part(
+                file_data=types.FileData(file_uri=url),
+                video_metadata=types.VideoMetadata(
+                    start_offset=f"{start}s", end_offset=f"{end}s", fps=0.1
+                ),
             )
-            return self._response_text(response)
-        except AIServiceError:
-            raise
-        except Exception as error:
-            raise self._classify(
-                error, "تعذر على خدمة الذكاء الاصطناعي قراءة فيديو YouTube الآن."
-            ) from error
+            prompt = (
+                f"هذا المقطع الزمني من {start} إلى {end} ثانية. "
+                "إذا كان المقطع بعد نهاية الفيديو فأعد فقط [NO_MEDIA].\n"
+                + TRANSCRIPTION_PROMPT
+            )
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model, contents=[video, prompt]
+                )
+                text = self._response_text(response)
+            except Exception as error:
+                logger.exception(
+                    "Gemini YouTube clip failed index=%s start=%s end=%s", index, start, end
+                )
+                raise self._classify(
+                    error, "تعذر على خدمة الذكاء الاصطناعي قراءة فيديو YouTube الآن."
+                ) from error
+            if text.strip() == "[NO_MEDIA]":
+                break
+            transcripts.append(f"[المقطع {index + 1}]\n{text.strip()}")
+        if not transcripts:
+            raise AIServiceError(
+                "YouTube URL returned no media", "لم يُرجع فيديو YouTube محتوى قابلًا للتفريغ."
+            )
+        return "\n\n".join(transcripts)
 
     def transcribe(self, stream, extension: str) -> str:
         """Compatibility path for the Phase 1 endpoint; chunked jobs use transcribe_path."""
