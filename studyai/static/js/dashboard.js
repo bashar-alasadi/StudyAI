@@ -226,22 +226,29 @@
       document.body.appendChild(holder);
       let player;
       let settled = false;
+      let durationPoll = null;
+      let timeout = null;
       const finish = value => {
         if (settled) return;
         settled = true;
+        if (durationPoll) clearInterval(durationPoll);
+        if (timeout) clearTimeout(timeout);
         try { if (player) player.destroy(); } catch { holder.remove(); }
         resolve(Number.isFinite(value) && value > 0 ? value : null);
       };
-      const timeout = setTimeout(() => finish(null), 10000);
+      timeout = setTimeout(() => finish(null), 12000);
       player = new window.YT.Player(holder.id, {
         width: 1, height: 1, videoId,
         playerVars: { autoplay: 0, controls: 0, playsinline: 1 },
         events: {
           onReady: event => {
-            clearTimeout(timeout);
-            finish(Number(event.target.getDuration()));
+            event.target.cueVideoById(videoId);
+            durationPoll = setInterval(() => {
+              const duration = Number(event.target.getDuration());
+              if (Number.isFinite(duration) && duration > 0) finish(duration);
+            }, 250);
           },
-          onError: () => { clearTimeout(timeout); finish(null); },
+          onError: () => finish(null),
         },
       });
     });
