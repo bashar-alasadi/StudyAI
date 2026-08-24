@@ -137,6 +137,9 @@ def _prepare_media(job_id: str, media: MediaService) -> list[SegmentFile]:
                 path, filename = download_web_media(job["source_url"], temporary)
             except WebMediaError:
                 logger.warning("media download blocked; trying complete YouTube captions")
+                if job["verbatim_transcript"]:
+                    logger.info("verbatim mode bypasses captions and reads the original media")
+                    return _prepare_ai_youtube_segment(job_id, job["source_url"], temporary)
                 try:
                     return _prepare_caption_segments(job_id, job["source_url"], temporary)
                 except WebMediaError:
@@ -226,6 +229,7 @@ def _prepare_ai_youtube_segment(job_id: str, url: str, work_dir: Path) -> list[S
                 job_id,
                 JobProgress(SEGMENTING, 12 + int(55 * completed / total), completed, total),
             ),
+            verbatim=bool(job["verbatim_transcript"]),
         )
     complete_segment(job_id, 0, transcript)
     set_media_metadata(job_id, "youtube_url", duration_seconds or 1)
@@ -249,6 +253,7 @@ def _prepare_direct_media(job_id: str, upload) -> list[SegmentFile]:
 
 
 def _transcribe_all(job_id: str, files: list[SegmentFile], ai, sleeper) -> None:
+    verbatim = bool(get_job(job_id)["verbatim_transcript"])
     completed_at_start = sum(row["status"] == "completed" for row in get_segments(job_id))
     transition_job(
         job_id, TRANSCRIBING,
@@ -263,7 +268,8 @@ def _transcribe_all(job_id: str, files: list[SegmentFile], ai, sleeper) -> None:
             row = get_segments(job_id)[segment_file.index]
             try:
                 complete_segment(
-                    job_id, segment_file.index, ai.transcribe_path(segment_file.path)
+                    job_id, segment_file.index,
+                    ai.transcribe_path(segment_file.path, verbatim=verbatim),
                 )
                 completed = sum(
                     item["status"] == "completed" for item in get_segments(job_id)

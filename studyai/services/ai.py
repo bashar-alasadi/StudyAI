@@ -86,13 +86,13 @@ class AIService:
         if close:
             close()
 
-    def transcribe_path(self, path: Path) -> str:
+    def transcribe_path(self, path: Path, *, verbatim: bool = True) -> str:
         remote_file = None
         try:
             remote_file = self.client.files.upload(file=path)
             remote_file = self._wait_until_ready(remote_file)
             return self._generate_text_with_fallback(
-                [remote_file, TRANSCRIPTION_PROMPT], "تعذر تفريغ هذا الجزء الآن."
+                [remote_file, transcription_prompt(verbatim)], "تعذر تفريغ هذا الجزء الآن."
             )
         except AIServiceError:
             raise
@@ -108,7 +108,8 @@ class AIService:
                     )
 
     def transcribe_youtube_url(
-        self, url: str, duration_seconds: float | None = None, progress_callback=None
+        self, url: str, duration_seconds: float | None = None, progress_callback=None,
+        *, verbatim: bool = True,
     ) -> str:
         """Read long public videos in bounded clips, then return the complete transcript."""
         from google.genai import types
@@ -134,7 +135,7 @@ class AIService:
                 "إذا كان المقطع بعد نهاية الفيديو فأعد فقط [NO_MEDIA]. "
                 "وإذا وصل هذا المقطع إلى النهاية الفعلية للفيديو فأضف في آخر سطر "
                 "[END_OF_VIDEO]. لا تضف هذه العلامة إذا كان الفيديو مستمرًا بعد هذا المقطع.\n"
-                + TRANSCRIPTION_PROMPT
+                + transcription_prompt(verbatim)
             )
             try:
                 text = self._generate_youtube_clip(video, prompt)
@@ -154,7 +155,7 @@ class AIService:
             text, reached_end = self._parse_youtube_clip_result(text)
             if not text:
                 break
-            transcripts.append(f"[المقطع {index + 1}]\n{text}")
+            transcripts.append(text if verbatim else f"[المقطع {index + 1}]\n{text}")
             if progress_callback:
                 progress_callback(index + 1, maximum_clips)
             if reached_end:
@@ -356,9 +357,25 @@ class AIService:
         )
 
 
-TRANSCRIPTION_PROMPT = """فرّغ كل الكلام المسموع في هذا الجزء كاملًا وبدقة، من بدايته إلى نهايته.
-لا تلخص، لا تحذف، ولا تضف معلومات. حافظ على اللغة والترتيب، واستخدم فقرات وعلامات ترقيم.
+VERBATIM_TRANSCRIPTION_PROMPT = """فرّغ كل الكلام المسموع في هذا الجزء حرفيًا وكاملًا،
+من بدايته إلى نهايته.
+اكتب ما نطق به المتحدث فقط، وبالترتيب نفسه،
+دون تلخيص أو حذف أو إضافة أو شرح أو تصحيح أو إعادة صياغة.
+حافظ على كل لغة كما نُطقت: العربي يبقى عربيًا، والإنجليزي يبقى إنجليزيًا، ولا تترجم بينهما.
+حافظ على المصطلحات والأسماء والأرقام والتكرار والتردد اللفظي كما سُمعت، ولا تستبدل المصطلح بشرح له.
+استخدم فقرات وعلامات ترقيم للقراءة فقط من دون تغيير الكلمات.
+إذا تعذرت معرفة كلمة مسموعة فاكتب [غير واضح] بدل تخمينها.
+أعد نص التفريغ فقط، من دون عنوان أو مقدمة أو خاتمة أو ملاحظات."""
+
+READABLE_TRANSCRIPTION_PROMPT = """فرّغ كل الكلام المسموع في هذا الجزء كاملًا وبدقة،
+من بدايته إلى نهايته.
+حافظ على لغة المتحدث والمصطلحات وترتيب الأفكار، ونظّم النص في فقرات واضحة.
+يمكن حذف التردد اللفظي والتكرار غير المقصود فقط لتحسين القراءة، لكن لا تلخص ولا تضف معلومات.
 إذا كانت كلمة غير واضحة فاكتب [غير واضح] بدل اختراعها."""
+
+
+def transcription_prompt(verbatim: bool = True) -> str:
+    return VERBATIM_TRANSCRIPTION_PROMPT if verbatim else READABLE_TRANSCRIPTION_PROMPT
 SUMMARY_PROMPT = """لخّص المحاضرة بالعربية في عناوين ونقاط مرتبة. حافظ على المفاهيم والأمثلة
 والتعريفات المهمة، ولا تضف معلومات غير موجودة في النص."""
 QUESTIONS_PROMPT = """أنشئ أسئلة مراجعة عربية متنوعة من المحاضرة، ثم ضع الإجابات في قسم منفصل.
@@ -405,12 +422,12 @@ class OpenAIService:
     def close(self):
         self.client.close()
 
-    def transcribe_path(self, path: Path) -> str:
+    def transcribe_path(self, path: Path, *, verbatim: bool = True) -> str:
         try:
             with path.open("rb") as audio:
                 response = self.client.audio.transcriptions.create(
                     model=self.transcription_model, file=audio,
-                    prompt="تفريغ دقيق وكامل مع الحفاظ على لغة المتحدث وترتيب الكلام.",
+                    prompt=transcription_prompt(verbatim),
                 )
             text = (getattr(response, "text", None) or "").strip()
             if not text:
@@ -421,7 +438,9 @@ class OpenAIService:
         except Exception as error:
             raise AIService._classify(error, "تعذر تفريغ الملف عبر OpenAI.") from error
 
-    def transcribe_youtube_url(self, _url: str, progress_callback=None) -> str:
+    def transcribe_youtube_url(
+        self, _url: str, progress_callback=None, *, verbatim: bool = True
+    ) -> str:
         raise AIServiceError(
             "OpenAI does not accept YouTube video URLs",
             "معالجة رابط YouTube المباشر تحتاج Gemini؛ استخدم OpenAI بعد تنزيل الملف.",

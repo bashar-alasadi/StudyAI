@@ -28,6 +28,10 @@
           <small>يجب أن يكون الرابط عامًا، ولا تدعم الميزة قوائم التشغيل أو الفيديوهات الخاصة.</small>
         </div>
         <label class="enrichment-option">
+          <input id="verbatim-transcript" type="checkbox" checked>
+          <span><strong>تفريغ حرفي مطابق للتسجيل</strong><small>يحافظ على العربي والإنجليزي والمصطلحات والتكرار كما نطقها المحاضر، دون ترجمة أو تلخيص أو تصحيح أو شرح.</small></span>
+        </label>
+        <label class="enrichment-option">
           <input id="include-explanations" type="checkbox">
           <span><strong>إضافة شرح وأمثلة توضيحية</strong><small>ينشئ دليلًا دراسيًا إضافيًا، ويميّز الأمثلة المضافة بوضوح عن كلام المحاضر.</small></span>
         </label>
@@ -43,7 +47,7 @@
       <section id="results-panel" class="panel hidden">
         <div class="panel-heading"><div><span class="panel-number">03</span><h2>نتيجة المحاضرة الكاملة</h2></div></div>
         <div class="result-tabs" role="tablist">
-          <button class="result-tab active" data-result="transcript" type="button">النص الكامل</button>
+          <button class="result-tab active" data-result="transcript" type="button">التفريغ الكامل</button>
           <button class="result-tab" data-result="summary" type="button">الملخص</button>
           <button class="result-tab" data-result="questions" type="button">الأسئلة</button>
           <button id="explanation-tab" class="result-tab hidden" data-result="explanation" type="button">الشرح والأمثلة</button>

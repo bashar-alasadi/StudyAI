@@ -66,6 +66,23 @@ def test_resumable_upload_and_idempotent_completion(app, client):
         ).fetchone()[0] == 0
 
 
+def test_file_completion_persists_selected_transcription_mode(app, client):
+    register_and_login(client)
+    upload = initialize(client, total_size=4, chunk_size=4).get_json()
+    assert put_chunk(client, upload["upload_id"], 0, b"data").status_code == 200
+    completed = client.post(
+        f"/api/uploads/{upload['upload_id']}/complete?verbatim_transcript=0",
+        headers={"X-CSRF-Token": csrf(client)},
+    )
+    assert completed.status_code == 202
+    with app.app_context():
+        row = get_db().execute(
+            "SELECT verbatim_transcript FROM processing_jobs WHERE id = ?",
+            (completed.get_json()["job_id"],),
+        ).fetchone()
+        assert row["verbatim_transcript"] == 0
+
+
 def test_assembly_resumes_after_disk_pressure_without_second_full_copy(
     app, client, monkeypatch
 ):

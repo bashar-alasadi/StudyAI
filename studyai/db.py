@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS processing_jobs (
     questions TEXT,
     explanation TEXT,
     include_explanations INTEGER NOT NULL DEFAULT 0,
+    verbatim_transcript INTEGER NOT NULL DEFAULT 1,
     error_code TEXT,
     safe_error_message TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -142,6 +143,11 @@ def init_db() -> None:
         database.execute(
             "ALTER TABLE processing_jobs ADD COLUMN include_explanations "
             "INTEGER NOT NULL DEFAULT 0"
+        )
+    if "verbatim_transcript" not in job_columns:
+        database.execute(
+            "ALTER TABLE processing_jobs ADD COLUMN verbatim_transcript "
+            "INTEGER NOT NULL DEFAULT 1"
         )
     database.execute(
         """INSERT OR IGNORE INTO users

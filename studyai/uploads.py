@@ -19,6 +19,7 @@ uploads_bp = Blueprint("uploads", __name__, url_prefix="/api/uploads")
 def initialize_url_upload():
     payload = request.get_json(silent=True) or {}
     include_explanations = bool(payload.get("include_explanations", False))
+    verbatim_transcript = payload.get("verbatim_transcript", True) is not False
     duration_seconds = payload.get("duration_seconds")
     if duration_seconds is not None:
         try:
@@ -34,6 +35,7 @@ def initialize_url_upload():
     job_id = create_job(
         public_user_id(), "رابط محاضرة", status=QUEUED, source_url=source_url,
         include_explanations=include_explanations,
+        verbatim_transcript=verbatim_transcript,
         duration_seconds=duration_seconds,
     )
     remember_resource("job", job_id)
@@ -105,6 +107,7 @@ def finalize_upload(upload_id: str):
     job_id = create_job(
         owner_id, upload["original_filename"], upload["total_size"], UPLOADED, upload_id,
         include_explanations=bool(request.args.get("include_explanations") == "1"),
+        verbatim_transcript=request.args.get("verbatim_transcript", "1") == "1",
     )
     transition_job(job_id, QUEUED)
     remember_resource("job", job_id)

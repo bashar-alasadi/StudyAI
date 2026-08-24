@@ -3,7 +3,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from studyai.services.ai import AIService, AIServiceError, OpenAIService
+from studyai.services.ai import (
+    AIService,
+    AIServiceError,
+    OpenAIService,
+    transcription_prompt,
+)
 
 
 class FilesAPI:
@@ -99,6 +104,20 @@ def test_token_count_and_generation():
     assert service.generate_questions("محاضرة كاملة") == "نص كامل"
 
 
+def test_verbatim_prompt_preserves_mixed_languages_and_forbids_rewriting():
+    prompt = transcription_prompt(True)
+    assert "العربي يبقى عربيًا" in prompt
+    assert "الإنجليزي يبقى إنجليزيًا" in prompt
+    assert "لا تترجم" in prompt
+    assert "دون تلخيص أو حذف أو إضافة أو شرح أو تصحيح أو إعادة صياغة" in prompt
+    assert "المصطلحات" in prompt
+
+
+def test_readable_mode_is_distinct_from_verbatim_mode():
+    assert transcription_prompt(False) != transcription_prompt(True)
+    assert "يمكن حذف التردد اللفظي" in transcription_prompt(False)
+
+
 def test_youtube_model_fallback_uses_supported_stable_model():
     class QuotaError(RuntimeError):
         status_code = 429
@@ -141,6 +160,18 @@ def test_youtube_end_marker_is_removed_and_stops_extra_clip():
     assert text == "آخر كلام في المحاضرة."
     assert reached_end is True
     assert AIService._parse_youtube_clip_result("[NO_MEDIA]") == ("", True)
+
+
+def test_verbatim_youtube_transcript_has_no_generated_segment_heading():
+    service = AIService(Client(), "model")
+    service._generate_youtube_clip = lambda _video, _prompt: (
+        "مصطلح API يبقى كما نُطق.\n[END_OF_VIDEO]"
+    )
+    transcript = service.transcribe_youtube_url(
+        "https://youtu.be/example", duration_seconds=60, verbatim=True
+    )
+    assert transcript == "مصطلح API يبقى كما نُطق."
+    assert "[المقطع" not in transcript
 
 
 def test_internal_error_after_successful_youtube_clips_is_recognized_as_end():

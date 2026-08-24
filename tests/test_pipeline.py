@@ -54,7 +54,8 @@ class FakePipelineAI:
     def count_tokens(self, text):
         return len(text)
 
-    def transcribe_path(self, path):
+    def transcribe_path(self, path, *, verbatim=True):
+        assert verbatim is True
         index = int(path.stem.split("-")[-1])
         self.calls.append(index)
         if self.failures.get(index, 0):
@@ -121,7 +122,8 @@ def test_direct_media_pipeline_needs_no_ffmpeg(app, client):
     job_id = make_queued_job(app, client)
 
     class DirectAI:
-        def transcribe_path(self, path):
+        def transcribe_path(self, path, *, verbatim=True):
+            assert verbatim is True
             assert path.name == "source.mp4"
             return "نص المحاضرة الكامل من الملف المباشر"
 
@@ -217,7 +219,8 @@ def test_non_retryable_segment_failure_marks_job_failed_and_keeps_media(app, cli
     job_id = make_queued_job(app, client)
 
     class RejectingAI(FakePipelineAI):
-        def transcribe_path(self, _path):
+        def transcribe_path(self, _path, *, verbatim=True):
+            assert verbatim is True
             raise AIServiceError(
                 "rejected", "ملف غير مقبول", retryable=False, code="provider_rejected"
             )

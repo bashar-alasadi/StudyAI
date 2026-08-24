@@ -3,7 +3,7 @@
   const csrf = document.querySelector('meta[name="csrf-token"]').content;
   const elements = Object.fromEntries([
     "audio-file", "drop-zone", "file-name", "upload-button", "lecture-url", "url-button", "upload-status",
-    "include-explanations", "explanation-tab",
+    "include-explanations", "verbatim-transcript", "explanation-tab",
     "progress-panel", "progress-percent", "progress-bar", "stage-message",
     "segment-progress", "retry-button", "results-panel", "result-content", "copy-button",
     "export-actions",
@@ -88,7 +88,8 @@
         showUploadStatus(`جارٍ رفع المحاضرة… ${percent}%`);
       }
       const explain = elements["include-explanations"].checked ? "1" : "0";
-      const queued = await request(`/api/uploads/${upload.upload_id}/complete?include_explanations=${explain}`, { method: "POST" });
+      const verbatim = elements["verbatim-transcript"].checked ? "1" : "0";
+      const queued = await request(`/api/uploads/${upload.upload_id}/complete?include_explanations=${explain}&verbatim_transcript=${verbatim}`, { method: "POST" });
       localStorage.removeItem(uploadStorageKey);
       currentJobId = queued.job_id;
       elements["progress-panel"].classList.remove("hidden");
@@ -114,6 +115,7 @@
           url,
           duration_seconds: durationSeconds,
           include_explanations: elements["include-explanations"].checked,
+          verbatim_transcript: elements["verbatim-transcript"].checked,
         }),
       });
       currentJobId = queued.job_id;
