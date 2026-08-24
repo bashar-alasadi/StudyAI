@@ -6,6 +6,7 @@
     "include-explanations", "explanation-tab",
     "progress-panel", "progress-percent", "progress-bar", "stage-message",
     "segment-progress", "retry-button", "results-panel", "result-content", "copy-button",
+    "export-actions",
   ].map(id => [id, document.getElementById(id)]));
   const stageMessages = {
     uploading: "جارٍ رفع المحاضرة…", uploaded: "اكتمل الرفع.", queued: "المهمة في انتظار العامل…",
@@ -51,6 +52,11 @@
     selectedResult = tab.dataset.result;
     document.querySelectorAll(".result-tab").forEach(item => item.classList.toggle("active", item === tab));
     elements["result-content"].textContent = results[selectedResult] || "";
+    updateExportActions();
+  }));
+  document.querySelectorAll(".export-button").forEach(button => button.addEventListener("click", () => {
+    if (!currentJobId || !results.explanation) return;
+    window.location.assign(`/api/jobs/${currentJobId}/export/explanation.${button.dataset.format}`);
   }));
   document.querySelectorAll(".step").forEach(step => step.addEventListener("click", () => {
     document.getElementById(step.dataset.target).scrollIntoView({ behavior: "smooth" });
@@ -152,6 +158,7 @@
     results = await request(`/api/jobs/${currentJobId}/result`);
     elements["explanation-tab"].classList.toggle("hidden", !results.explanation);
     elements["result-content"].textContent = results[selectedResult] || "";
+    updateExportActions();
     elements["results-panel"].classList.remove("hidden");
     activateStep("results-panel");
   }
@@ -279,6 +286,11 @@
   function setButtonLoading(loading) { elements["upload-button"].disabled = loading; elements["upload-button"].textContent = loading ? "جارٍ الرفع…" : "رفع المحاضرة وبدء المعالجة"; }
   function setUrlLoading(loading) { elements["url-button"].disabled = loading; elements["url-button"].textContent = loading ? "جارٍ الإضافة…" : "تلخيص الرابط"; }
   function activateStep(target) { document.querySelectorAll(".step").forEach(step => step.classList.toggle("active", step.dataset.target === target)); }
+  function updateExportActions() {
+    elements["export-actions"].classList.toggle(
+      "hidden", selectedResult !== "explanation" || !results.explanation,
+    );
+  }
   function formatBytes(bytes) { if (!bytes) return "0 B"; const units = ["B", "KB", "MB", "GB"]; const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), 3); return `${(bytes / 1024 ** index).toFixed(index ? 1 : 0)} ${units[index]}`; }
   reconnectLatest();
 })();

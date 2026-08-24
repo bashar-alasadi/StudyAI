@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from flask import Blueprint, current_app, jsonify, session
+from io import BytesIO
+
+from flask import Blueprint, current_app, jsonify, send_file, session
 
 from .auth import owns_resource, public_user_id
 from .jobs import FAILED, fail_job, get_job, latest_job, prepare_retry
 from .queueing import get_job_queue
+from .services.exports import build_docx, build_markdown, build_pdf
 
 api_bp = Blueprint("api", __name__, url_prefix="/api/jobs")
 
@@ -52,6 +55,42 @@ def result(job_id: str):
         questions=job["questions"],
         explanation=job["explanation"],
     )
+
+
+@api_bp.get("/<job_id>/export/explanation.<file_format>")
+def export_explanation(job_id: str, file_format: str):
+    if not owns_resource("job", job_id):
+        return jsonify(error="مهمة المعالجة غير موجودة."), 404
+    job = get_job(job_id, public_user_id())
+    if job is None:
+        return jsonify(error="مهمة المعالجة غير موجودة."), 404
+    if job["status"] != "completed":
+        return jsonify(error="نتيجة المحاضرة لم تكتمل بعد."), 409
+    explanation = (job["explanation"] or "").strip()
+    if not explanation:
+        return jsonify(error="لا يوجد شرح إضافي لتصديره في هذه المحاضرة."), 409
+
+    exporters = {
+        "md": (build_markdown, "text/markdown; charset=utf-8"),
+        "docx": (
+            build_docx,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ),
+        "pdf": (build_pdf, "application/pdf"),
+    }
+    if file_format not in exporters:
+        return jsonify(error="صيغة التصدير غير مدعومة."), 404
+    builder, mime_type = exporters[file_format]
+    payload = builder(explanation, job["original_filename"])
+    response = send_file(
+        BytesIO(payload),
+        mimetype=mime_type,
+        as_attachment=True,
+        download_name=f"studyai-explanation-{job_id[:8]}.{file_format}",
+        max_age=0,
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @api_bp.post("/<job_id>/retry")
