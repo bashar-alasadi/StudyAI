@@ -48,6 +48,39 @@ class StudyBlock:
     marker: str = ""
 
 
+@dataclass(frozen=True)
+class TranscriptSection:
+    title: str
+    text: str
+
+
+def organize_transcript(text: str, target_words: int = 450) -> list[TranscriptSection]:
+    """Add grounded navigation without changing, removing, or inventing transcript words."""
+    words = text.strip().split()
+    if not words:
+        return []
+    sections: list[TranscriptSection] = []
+    for start in range(0, len(words), target_words):
+        section_words = words[start : start + target_words]
+        excerpt = " ".join(section_words[:10]).strip("-–—،,:؛.!؟ ")
+        if len(section_words) > 10:
+            excerpt += "…"
+        number = len(sections) + 1
+        sections.append(
+            TranscriptSection(
+                title=f"القسم {number:02d} — {excerpt}",
+                text=" ".join(section_words),
+            )
+        )
+    return sections
+
+
+def format_organized_transcript(text: str) -> str:
+    return "\n\n".join(
+        f"## {section.title}\n\n{section.text}" for section in organize_transcript(text)
+    )
+
+
 def build_markdown(
     content_text: str,
     source_name: str,

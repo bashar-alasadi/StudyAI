@@ -9,7 +9,13 @@ from flask import Blueprint, current_app, jsonify, send_file, session
 from .auth import owns_resource, public_user_id
 from .jobs import FAILED, fail_job, get_job, latest_job, prepare_retry
 from .queueing import get_job_queue
-from .services.exports import build_docx, build_markdown, build_pdf
+from .services.exports import (
+    build_docx,
+    build_markdown,
+    build_pdf,
+    format_organized_transcript,
+    organize_transcript,
+)
 
 api_bp = Blueprint("api", __name__, url_prefix="/api/jobs")
 
@@ -48,9 +54,14 @@ def result(job_id: str):
         return jsonify(error="مهمة المعالجة غير موجودة."), 404
     if job["status"] != "completed":
         return jsonify(error="نتيجة المحاضرة لم تكتمل بعد."), 409
+    transcript = job["transcript"] or ""
     return jsonify(
         job_id=job["id"],
-        transcript=job["transcript"],
+        transcript=transcript,
+        transcript_sections=[
+            {"title": section.title, "text": section.text}
+            for section in organize_transcript(transcript)
+        ],
         summary=job["summary"],
         questions=job["questions"],
         explanation=job["explanation"],
@@ -78,6 +89,8 @@ def export_result(job_id: str, result_type: str, file_format: str):
     content_text = (job[field] or "").strip()
     if not content_text:
         return jsonify(error="لا يوجد محتوى لتصديره في هذا القسم."), 409
+    if result_type == "transcript":
+        content_text = format_organized_transcript(content_text)
 
     exporters = {
         "md": (build_markdown, "text/markdown; charset=utf-8"),

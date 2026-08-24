@@ -6,7 +6,7 @@ from docx import Document
 
 from studyai.db import get_db
 from studyai.jobs import COMPLETED, UPLOADING, create_job
-from studyai.services.exports import parse_study_blocks
+from studyai.services.exports import organize_transcript, parse_study_blocks
 
 EXPLANATION = """# المفهوم الأساسي
 
@@ -83,6 +83,8 @@ def test_transcript_summary_and_questions_can_each_be_exported(app, client):
         markdown = client.get(f"/api/jobs/{job_id}/export/{result_type}.md")
         assert markdown.status_code == 200
         assert title.encode("utf-8") in markdown.data
+        if result_type == "transcript":
+            assert "## القسم 01".encode() in markdown.data
 
         word = client.get(f"/api/jobs/{job_id}/export/{result_type}.docx")
         assert word.status_code == 200
@@ -117,3 +119,23 @@ def test_study_block_parser_preserves_semantic_structure():
         "example",
     ]
     assert blocks[-1].text.startswith("إذا زادت السرعة")
+
+
+def test_transcript_organization_preserves_every_original_word_and_grounds_titles():
+    transcript = " ".join(f"كلمة{i}" for i in range(905))
+    sections = organize_transcript(transcript)
+    assert len(sections) == 3
+    assert " ".join(section.text for section in sections) == transcript
+    for section in sections:
+        excerpt = section.title.split("—", 1)[1].strip().removesuffix("…")
+        assert section.text.startswith(excerpt)
+
+
+def test_result_api_keeps_raw_transcript_and_adds_safe_display_sections(app, client):
+    register_and_login(client)
+    job_id = _completed_job(app)
+    payload = client.get(f"/api/jobs/{job_id}/result").get_json()
+    assert payload["transcript"] == "هذا هو التفريغ الكامل للمحاضرة."
+    assert " ".join(item["text"] for item in payload["transcript_sections"]) == payload[
+        "transcript"
+    ]

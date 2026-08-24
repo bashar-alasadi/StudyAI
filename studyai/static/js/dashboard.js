@@ -19,6 +19,7 @@
   };
   let currentJobId = null;
   let results = {};
+  let transcriptSections = [];
   let selectedResult = "transcript";
   let pollTimer = null;
   let youtubeApiPromise = null;
@@ -51,7 +52,7 @@
   document.querySelectorAll(".result-tab").forEach(tab => tab.addEventListener("click", () => {
     selectedResult = tab.dataset.result;
     document.querySelectorAll(".result-tab").forEach(item => item.classList.toggle("active", item === tab));
-    elements["result-content"].textContent = results[selectedResult] || "";
+    renderSelectedResult();
     updateExportActions();
   }));
   document.querySelectorAll(".export-button").forEach(button => button.addEventListener("click", () => {
@@ -158,8 +159,9 @@
 
   async function loadResult() {
     results = await request(`/api/jobs/${currentJobId}/result`);
+    transcriptSections = results.transcript_sections || [];
     elements["explanation-tab"].classList.toggle("hidden", !results.explanation);
-    elements["result-content"].textContent = results[selectedResult] || "";
+    renderSelectedResult();
     updateExportActions();
     elements["results-panel"].classList.remove("hidden");
     activateStep("results-panel");
@@ -292,6 +294,24 @@
     elements["export-actions"].classList.toggle(
       "hidden", !currentJobId || !results[selectedResult],
     );
+  }
+  function renderSelectedResult() {
+    const container = elements["result-content"];
+    container.replaceChildren();
+    if (selectedResult !== "transcript" || !transcriptSections.length) {
+      container.textContent = results[selectedResult] || "";
+      return;
+    }
+    transcriptSections.forEach(section => {
+      const article = document.createElement("section");
+      article.className = "transcript-section";
+      const heading = document.createElement("h3");
+      heading.textContent = section.title;
+      const paragraph = document.createElement("p");
+      paragraph.textContent = section.text;
+      article.append(heading, paragraph);
+      container.append(article);
+    });
   }
   function formatBytes(bytes) { if (!bytes) return "0 B"; const units = ["B", "KB", "MB", "GB"]; const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), 3); return `${(bytes / 1024 ** index).toFixed(index ? 1 : 0)} ${units[index]}`; }
   reconnectLatest();
