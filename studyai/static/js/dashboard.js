@@ -55,8 +55,8 @@
     updateExportActions();
   }));
   document.querySelectorAll(".export-button").forEach(button => button.addEventListener("click", () => {
-    if (!currentJobId || !results.explanation) return;
-    window.location.assign(`/api/jobs/${currentJobId}/export/explanation.${button.dataset.format}`);
+    if (!currentJobId || !results[selectedResult]) return;
+    window.location.assign(`/api/jobs/${currentJobId}/export/${selectedResult}.${button.dataset.format}`);
   }));
   document.querySelectorAll(".step").forEach(step => step.addEventListener("click", () => {
     document.getElementById(step.dataset.target).scrollIntoView({ behavior: "smooth" });
@@ -290,7 +290,7 @@
   function activateStep(target) { document.querySelectorAll(".step").forEach(step => step.classList.toggle("active", step.dataset.target === target)); }
   function updateExportActions() {
     elements["export-actions"].classList.toggle(
-      "hidden", selectedResult !== "explanation" || !results.explanation,
+      "hidden", !currentJobId || !results[selectedResult],
     );
   }
   function formatBytes(bytes) { if (!bytes) return "0 B"; const units = ["B", "KB", "MB", "GB"]; const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), 3); return `${(bytes / 1024 ** index).toFixed(index ? 1 : 0)} ${units[index]}`; }

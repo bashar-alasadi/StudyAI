@@ -20,6 +20,7 @@ def test_dashboard_is_public(client):
     assert response.status_code == 200
     assert 'id="verbatim-transcript"' in response.get_data(as_text=True)
     assert "تفريغ حرفي مطابق للتسجيل" in response.get_data(as_text=True)
+    assert "حفظ القسم المحدد" in response.get_data(as_text=True)
     assert "لا تحتاج إلى تسجيل" in response.text
 
 

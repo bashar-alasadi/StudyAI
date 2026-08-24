@@ -57,8 +57,8 @@ def result(job_id: str):
     )
 
 
-@api_bp.get("/<job_id>/export/explanation.<file_format>")
-def export_explanation(job_id: str, file_format: str):
+@api_bp.get("/<job_id>/export/<result_type>.<file_format>")
+def export_result(job_id: str, result_type: str, file_format: str):
     if not owns_resource("job", job_id):
         return jsonify(error="مهمة المعالجة غير موجودة."), 404
     job = get_job(job_id, public_user_id())
@@ -66,9 +66,18 @@ def export_explanation(job_id: str, file_format: str):
         return jsonify(error="مهمة المعالجة غير موجودة."), 404
     if job["status"] != "completed":
         return jsonify(error="نتيجة المحاضرة لم تكتمل بعد."), 409
-    explanation = (job["explanation"] or "").strip()
-    if not explanation:
-        return jsonify(error="لا يوجد شرح إضافي لتصديره في هذه المحاضرة."), 409
+    result_types = {
+        "transcript": ("transcript", "التفريغ الكامل"),
+        "summary": ("summary", "ملخص المحاضرة"),
+        "questions": ("questions", "أسئلة المراجعة وإجاباتها"),
+        "explanation": ("explanation", "الشرح والأمثلة التوضيحية"),
+    }
+    if result_type not in result_types:
+        return jsonify(error="نوع النتيجة المطلوب تصديرها غير مدعوم."), 404
+    field, title = result_types[result_type]
+    content_text = (job[field] or "").strip()
+    if not content_text:
+        return jsonify(error="لا يوجد محتوى لتصديره في هذا القسم."), 409
 
     exporters = {
         "md": (build_markdown, "text/markdown; charset=utf-8"),
@@ -81,12 +90,12 @@ def export_explanation(job_id: str, file_format: str):
     if file_format not in exporters:
         return jsonify(error="صيغة التصدير غير مدعومة."), 404
     builder, mime_type = exporters[file_format]
-    payload = builder(explanation, job["original_filename"])
+    payload = builder(content_text, job["original_filename"], title)
     response = send_file(
         BytesIO(payload),
         mimetype=mime_type,
         as_attachment=True,
-        download_name=f"studyai-explanation-{job_id[:8]}.{file_format}",
+        download_name=f"studyai-{result_type}-{job_id[:8]}.{file_format}",
         max_age=0,
     )
     response.headers["Cache-Control"] = "no-store"

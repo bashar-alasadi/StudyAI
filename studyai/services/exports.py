@@ -1,4 +1,4 @@
-"""Create polished study-guide exports for completed lecture explanations."""
+"""Create polished exports for every completed lecture result."""
 
 from __future__ import annotations
 
@@ -48,13 +48,17 @@ class StudyBlock:
     marker: str = ""
 
 
-def build_markdown(explanation: str, source_name: str) -> bytes:
+def build_markdown(
+    content_text: str,
+    source_name: str,
+    title: str = "الشرح والأمثلة التوضيحية",
+) -> bytes:
     """Return editable UTF-8 Markdown with a small, useful document header."""
     source = source_name.strip() or "محاضرة"
-    body = explanation.strip()
+    body = content_text.strip()
     generated = datetime.now(UTC).strftime("%Y-%m-%d")
     content = (
-        "# الشرح والأمثلة التوضيحية\n\n"
+        f"# {title}\n\n"
         f"> **المصدر:** {source}  \n"
         f"> **تاريخ الإنشاء:** {generated}  \n"
         "> **أُنشئ بواسطة:** StudyAI\n\n"
@@ -64,7 +68,11 @@ def build_markdown(explanation: str, source_name: str) -> bytes:
     return b"\xef\xbb\xbf" + content.replace("\r\n", "\n").encode("utf-8")
 
 
-def build_docx(explanation: str, source_name: str) -> bytes:
+def build_docx(
+    content_text: str,
+    source_name: str,
+    title_text: str = "الشرح والأمثلة التوضيحية",
+) -> bytes:
     """Return a real RTL Word document using a compact reference-guide layout."""
     document = Document()
     section = document.sections[0]
@@ -90,7 +98,7 @@ def build_docx(explanation: str, source_name: str) -> bytes:
     title = document.add_paragraph(style="Title")
     _format_docx_paragraph(title, before=0, after=8, line_spacing=1.0)
     title.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    run = title.add_run("الشرح والأمثلة التوضيحية")
+    run = title.add_run(title_text)
     _format_docx_run(run, size=28, color=GREEN_DARK, bold=True)
 
     metadata = document.add_paragraph()
@@ -105,7 +113,7 @@ def build_docx(explanation: str, source_name: str) -> bytes:
 
     previous_kind = ""
     numbering_id: int | None = None
-    for block in parse_study_blocks(explanation):
+    for block in parse_study_blocks(content_text):
         if block.kind == "heading":
             paragraph = document.add_paragraph(style=f"Heading {min(block.level, 3)}")
             run = paragraph.add_run(block.text)
@@ -145,17 +153,21 @@ def build_docx(explanation: str, source_name: str) -> bytes:
     return output.getvalue()
 
 
-def build_pdf(explanation: str, source_name: str) -> bytes:
+def build_pdf(
+    content_text: str,
+    source_name: str,
+    title_text: str = "الشرح والأمثلة التوضيحية",
+) -> bytes:
     """Return a paginated Arabic PDF with shaped, line-wrapped RTL text."""
     _register_pdf_font()
     output = BytesIO()
     pdf = canvas.Canvas(output, pagesize=LETTER, pageCompression=1)
-    pdf.setTitle("StudyAI - الشرح والأمثلة التوضيحية")
+    pdf.setTitle(f"StudyAI - {title_text}")
     pdf.setAuthor("StudyAI")
     renderer = _PdfStudyGuide(pdf)
     renderer.start_page()
-    renderer.draw_title(source_name)
-    for block in parse_study_blocks(explanation):
+    renderer.draw_title(source_name, title_text)
+    for block in parse_study_blocks(content_text):
         renderer.draw_block(block)
     renderer.finish()
     return output.getvalue()
@@ -469,14 +481,14 @@ class _PdfStudyGuide:
     def finish(self) -> None:
         self.pdf.save()
 
-    def draw_title(self, source_name: str) -> None:
+    def draw_title(self, source_name: str, title_text: str) -> None:
         self.pdf.setFillColor(HexColor(f"#{GREEN}"))
         self.pdf.setFont(self.font_name, 10)
         self.pdf.drawRightString(self.right, self.y, _rtl("دليل دراسي منظم"))
         self.y -= 26
         self.pdf.setFillColor(HexColor(f"#{GREEN_DARK}"))
         self.pdf.setFont(self.font_name, 22)
-        self.pdf.drawRightString(self.right, self.y, _rtl("الشرح والأمثلة التوضيحية"))
+        self.pdf.drawRightString(self.right, self.y, _rtl(title_text))
         self.y -= 31
         source = source_name.strip() or "محاضرة"
         metadata = (
